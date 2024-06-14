@@ -22,6 +22,7 @@ setup(
         'console_scripts': [
             'cluster_bbox_viz = adonis_mot.cluster_bbox_viz:main',
             'cluster_bbox_pc_fusion_viz = adonis_mot.cluster_bbox_pc_fusion_viz:main',
+            'ocsort_cluster_bbox_viz = adonis_mot.ocsort_cluster_bbox_viz:main',
         ],
     },
 )
