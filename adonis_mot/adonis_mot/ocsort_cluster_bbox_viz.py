@@ -50,7 +50,12 @@ class ClusterBoundingBoxViz(Node):
             0: (0.3, 0.3, 0.3),
         }
 
-        self.ocsort = OCSort(det_thresh=0.5, iou_threshold=0.1)
+        self.ocsort = OCSort(
+            det_thresh=0.5, 
+            iou_threshold=0.1,
+            delta_t=7,
+            inertia=0.2,
+            )
 
     def setup_visualizer(self):
         # Add 8 points to initiate the visualizer's bounding box
