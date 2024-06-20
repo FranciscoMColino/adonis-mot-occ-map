@@ -7,6 +7,7 @@ import open3d as o3d
 import cv2
 
 from .ocsort_tracker.ocsort import OCSort
+from .ocsort_tracker.v_ocsort import VOCSort
 
 def load_pointcloud_from_ros2_msg(msg):
     pc2_points = pc2.read_points_numpy(msg, field_names=("x", "y", "z"), skip_nans=True)
@@ -35,7 +36,7 @@ def get_track_struct_from_2d_bbox(bbox):
     track[1] = bbox[0][1]
     track[2] = bbox[1][0]
     track[3] = bbox[1][1]
-    track[4] = 0.9 # Dummy confidence score
+    track[4] = 1.0 # Dummy confidence score
     return track
 
 class ClusterBoundingBoxViz(Node):
@@ -51,10 +52,10 @@ class ClusterBoundingBoxViz(Node):
             0: (0.3, 0.3, 0.3),
         }
 
-        self.ocsort = OCSort(
-            det_thresh=0.5, 
-            iou_threshold=0.1,
-            delta_t=15,
+        self.ocsort = VOCSort(
+            #det_thresh=0.5, 
+            iou_threshold=0.01, # 0.1
+            delta_t=1,          # 15
             max_age=150,
             inertia=0.2,
         )
@@ -96,10 +97,7 @@ class ClusterBoundingBoxViz(Node):
         bboxes_array = np.array([get_2d_bbox_from_3d_bbox(np.array([[p.x, p.y, p.z] for p in ember_cluster.bounding_box.points])) for ember_cluster in ember_cluster_array])
         bboxes_to_track = np.array([get_track_struct_from_2d_bbox(bbox) for bbox in bboxes_array])
 
-        mock_img_info = np.array([640, 480])
-        mock_img_size = np.array([640, 480])
-
-        tracking_res = self.ocsort.update(bboxes_to_track, mock_img_info, mock_img_size)
+        tracking_res = self.ocsort.update(bboxes_to_track)
 
         for i in range(len(ember_cluster_array)):
             ember_cluster = ember_cluster_array[i]
