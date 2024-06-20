@@ -135,10 +135,6 @@ class ClusterBoundingBoxViz(Node):
             cluster_point_cloud.points = o3d.utility.Vector3dVector(cluster_points)
             cluster_point_cloud.paint_uniform_color(color)
             self.vis.add_geometry(cluster_point_cloud, reset_bounding_box=False)
-
-            # Calculate the farthest corner of the bounding box for text positioning
-            farthest_corner = np.max(bbox_points, axis=0)
-            self.add_text_label(track_id, farthest_corner)
             
         self.vis.poll_events()
         self.vis.update_renderer()
@@ -150,12 +146,6 @@ class ClusterBoundingBoxViz(Node):
         # Display the image with text overlay
         cv2.imshow("Open3D with Text Overlay", image)
         cv2.waitKey(1)
-
-    def add_text_label(self, track_id, position):
-        """
-        Dummy function to illustrate where text labels would be added.
-        """
-        pass
 
     def capture_image(self):
         """
