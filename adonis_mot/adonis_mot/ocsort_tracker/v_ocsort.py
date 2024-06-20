@@ -39,21 +39,19 @@ class VOCSort(object):
     def update(self, dets):
         """
         Params:
-          dets - a numpy array of detections in the format [[x1,y1,x2,y2],[x1,y1,x2,y2],...]
+        dets - a numpy array of detections in the format [[x1,y1,x2,y2],[x1,y1,x2,y2],...]
         Requires: this method must be called once for each frame even with empty detections (use np.empty((0, 4)) for frames without detections).
-        Returns the a similar array, where the last column is the object ID.
+        Returns a similar array, where the last column is the object ID.
         NOTE: The number of objects returned may differ from the number of detections provided.
         """
 
         if dets is None:
             return np.empty((0, 5))
         elif dets.shape[1] == 4:
-            # This is a dummy confidence score of 1.0, as to be compatible with the original SORT
             dets = np.concatenate((dets, np.ones((dets.shape[0], 1))), axis=1)
 
         self.frame_count += 1
 
-        # get predicted locations from existing trackers.
         trks = np.zeros((len(self.trackers), 5))
         to_del = []
         ret = []
@@ -66,34 +64,22 @@ class VOCSort(object):
         for t in reversed(to_del):
             self.trackers.pop(t)
 
-        velocities = np.array(
-            [trk.velocity if trk.velocity is not None else np.array((0, 0)) for trk in self.trackers])
+        velocities = np.array([trk.velocity if trk.velocity is not None else np.array((0, 0)) for trk in self.trackers])
         last_boxes = np.array([trk.last_observation for trk in self.trackers])
-        k_observations = np.array(
-            [k_previous_obs(trk.observations, trk.age, self.delta_t) for trk in self.trackers])
+        k_observations = np.array([k_previous_obs(trk.observations, trk.age, self.delta_t) for trk in self.trackers])
+        tracker_ages = np.array([trk.age for trk in self.trackers])
 
-        """
-            First round of association
-        """
-        matched, unmatched_dets, unmatched_trks = associate(
-            dets, trks, self.iou_threshold, velocities, k_observations, self.inertia)
+        matched, unmatched_dets, unmatched_trks = associate_old_pref(
+            dets, trks, self.iou_threshold, velocities, k_observations, self.inertia, tracker_ages)
         for m in matched:
             self.trackers[m[1]].update(dets[m[0], :])
 
-        """
-            Second round of associaton by OCR
-        """
         if unmatched_dets.shape[0] > 0 and unmatched_trks.shape[0] > 0:
             left_dets = dets[unmatched_dets]
             left_trks = last_boxes[unmatched_trks]
             iou_left = self.asso_func(left_dets, left_trks)
             iou_left = np.array(iou_left)
             if iou_left.max() > self.iou_threshold:
-                """
-                    NOTE: by using a lower threshold, e.g., self.iou_threshold - 0.1, you may
-                    get a higher performance especially on MOT17/MOT20 datasets. But we keep it
-                    uniform here for simplicity
-                """
                 rematched_indices = linear_assignment(-iou_left)
                 to_remove_det_indices = []
                 to_remove_trk_indices = []
@@ -110,11 +96,6 @@ class VOCSort(object):
         for m in unmatched_trks:
             self.trackers[m].update(None)
 
-        # my own debug stuff
-        # unmatched_trck_ids = [self.trackers[m].id for m in unmatched_trks]
-        # print('unmatched_trck_ids', unmatched_trck_ids)
-
-        # create and initialise new trackers for unmatched detections
         for i in unmatched_dets:
             trk = KalmanBoxTracker(dets[i, :], delta_t=self.delta_t)
             self.trackers.append(trk)
@@ -123,19 +104,13 @@ class VOCSort(object):
             if trk.last_observation.sum() < 0:
                 d = trk.get_state()[0]
             else:
-                """
-                    this is optional to use the recent observation or the kalman filter prediction,
-                    we didn't notice significant difference here
-                """
                 d = trk.last_observation[:4]
             if (trk.time_since_update < 1) and (trk.hit_streak >= self.min_hits or self.frame_count <= self.min_hits):
-                # +1 as MOT benchmark requires positive
                 ret.append(np.concatenate((d, [trk.id+1])).reshape(1, -1))
             i -= 1
-            # remove dead tracklet
-            if(trk.time_since_update > self.max_age):
+            if trk.time_since_update > self.max_age:
                 self.trackers.pop(i)
-        if(len(ret) > 0):
+        if len(ret) > 0:
             return np.concatenate(ret)
         return np.empty((0, 5))
 
