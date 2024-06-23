@@ -113,5 +113,8 @@ class VOCSort(object):
         if len(ret) > 0:
             return np.concatenate(ret)
         return np.empty((0, 5))
+    
+    def get_trackers(self):
+        return self.trackers
 
 

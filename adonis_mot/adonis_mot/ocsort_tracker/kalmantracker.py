@@ -7,7 +7,7 @@ class KalmanBoxTracker(object):
     """
     count = 0
 
-    def __init__(self, bbox, delta_t=3, orig=False):
+    def __init__(self, bbox, delta_t=3, orig=False, lost_growth_rate=99999):
         """
         Initialises a tracker using initial bounding box.
 
@@ -49,6 +49,10 @@ class KalmanBoxTracker(object):
         self.velocity = None
         self.delta_t = delta_t
 
+        self.lost_growth_rate = 0.01
+        self.start_growth_t = 0
+        self.start_growth_boost = 3
+
     def update(self, bbox):
         """
         Updates the state vector with observed bbox.
@@ -84,6 +88,32 @@ class KalmanBoxTracker(object):
         else:
             self.kf.update(bbox)
 
+    def grow_bbox(self, bbox):
+
+        bbox_x_range = (bbox[2] - bbox[0]) * self.lost_growth_rate * (self.time_since_update - self.start_growth_t + self.start_growth_boost)
+        bbox_y_range = (bbox[3] - bbox[1]) * self.lost_growth_rate * (self.time_since_update - self.start_growth_t + self.start_growth_boost)
+        
+        #bbox_x_range = (bbox[2] - bbox[0]) * self.lost_growth_rate ** ((50 + self.time_since_update) / 50) * (self.time_since_update - self.start_growth_t + self.start_growth_boost)
+        #bbox_y_range = (bbox[3] - bbox[1]) * self.lost_growth_rate ** ((50 + self.time_since_update) / 50) * (self.time_since_update - self.start_growth_t + self.start_growth_boost)
+
+        bbox[0] -= bbox_x_range
+        bbox[1] -= bbox_y_range
+        bbox[2] += bbox_x_range
+        bbox[3] += bbox_y_range
+        
+
+        if self.velocity is not None:
+            pred_direction = self.velocity
+            #translate_vec = pred_direction * np.sqrt((bbox[2] - bbox[0])**2 + (bbox[3] - bbox[1])**2)
+            #translate_vec = pred_direction * np.sqrt((np.abs(bbox[2] - bbox[0])+np.abs(bbox_x_range*2))**2 + (np.abs(bbox[3] - bbox[1])+np.abs(bbox_y_range*2))**2)
+            translate_vec = pred_direction * np.sqrt((bbox_x_range/2)**2 + (bbox_y_range/2)**2)
+            bbox[0] += translate_vec[1]
+            bbox[1] += translate_vec[0]
+            bbox[2] += translate_vec[1]
+            bbox[3] += translate_vec[0]
+
+        return bbox
+
     def predict(self):
         """
         Advances the state vector and returns the predicted bounding box estimate.
@@ -97,8 +127,21 @@ class KalmanBoxTracker(object):
             self.hit_streak = 0
         self.time_since_update += 1
         self.history.append(convert_x_to_bbox(self.kf.x))
-        return self.history[-1]
 
+        bbox = self.history[-1][0]
+        #if self.time_since_update > self.start_growth_t and bbox is not None:
+        #    self.grow_bbox(bbox)
+
+        return [bbox]
+    
+    def get_growth_bbox(self):
+        if len(self.history) == 0:
+            return None
+        bbox = self.history[-1][0]
+        if self.time_since_update > self.start_growth_t and bbox is not None:
+            self.grow_bbox(bbox)
+        return bbox
+        
     def get_state(self):
         """
         Returns the current bounding box estimate.
