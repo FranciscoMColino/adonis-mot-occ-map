@@ -54,6 +54,21 @@ class KalmanBoxTracker(object):
         self.start_growth_t = 0
         self.start_growth_boost = 3
 
+        self.box_dims = None
+
+    def get_avg_box_dims(self, start_dt=0, end_dt=5):
+        if len(self.history_observations) == 0:
+            return None
+        box_dims = []
+        for i in range(start_dt, end_dt):
+            dt = end_dt - i
+            if self.age - dt in self.observations:
+                box = self.observations[self.age-dt]
+                box_dims.append([np.abs(box[2] - box[0]), np.abs(box[3] - box[1])])
+        if len(box_dims) == 0:
+            return None
+        return np.mean(box_dims, axis=0)
+
     def update(self, bbox):
         """
         Updates the state vector with observed bbox.
@@ -95,28 +110,51 @@ class KalmanBoxTracker(object):
             self.hits += 1
             self.hit_streak += 1
             self.kf.update(convert_bbox_to_z(bbox))
+            self.box_dims = np.array([bbox[2] - bbox[0], bbox[3] - bbox[1]])
         else:
             self.kf.update(bbox)
+            self.box_dims = self.get_avg_box_dims()
 
     def grow_bbox(self, bbox):
 
-        bbox_x_range = (bbox[2] - bbox[0]) * self.lost_growth_rate * (self.time_since_update - self.start_growth_t + self.start_growth_boost)
-        bbox_y_range = (bbox[3] - bbox[1]) * self.lost_growth_rate * (self.time_since_update - self.start_growth_t + self.start_growth_boost)
+        #bbox_x_range = (bbox[2] - bbox[0]) * self.lost_growth_rate * (self.time_since_update - self.start_growth_t + self.start_growth_boost)
+        #bbox_y_range = (bbox[3] - bbox[1]) * self.lost_growth_rate * (self.time_since_update - self.start_growth_t + self.start_growth_boost)
         
-        #bbox_x_range = (bbox[2] - bbox[0]) * self.lost_growth_rate ** ((50 + self.time_since_update) / 50) * (self.time_since_update - self.start_growth_t + self.start_growth_boost)
-        #bbox_y_range = (bbox[3] - bbox[1]) * self.lost_growth_rate ** ((50 + self.time_since_update) / 50) * (self.time_since_update - self.start_growth_t + self.start_growth_boost)
+        x_center = (bbox[2] + bbox[0]) / 2
+        y_center = (bbox[3] + bbox[1]) / 2
 
-        bbox[0] -= bbox_x_range
-        bbox[1] -= bbox_y_range
-        bbox[2] += bbox_x_range
-        bbox[3] += bbox_y_range
+        if self.box_dims is not None:
+            bbox_w = self.box_dims[0]
+            bbox_h = self.box_dims[1]
+        else:
+            bbox_w = np.abs(bbox[2] - bbox[0])
+            bbox_h = np.abs(bbox[3] - bbox[1])
+
+        bbox_w_increase = bbox_w * self.lost_growth_rate * (self.time_since_update - self.start_growth_t + self.start_growth_boost)
+        bbox_h_increase = bbox_h * self.lost_growth_rate * (self.time_since_update - self.start_growth_t + self.start_growth_boost)
+
+        bbox_new_w = bbox_w + bbox_w_increase
+        bbox_new_h = bbox_h + bbox_h_increase
         
+        if bbox[0] < bbox[2]:
+            bbox[0] = x_center - bbox_new_w / 2
+            bbox[2] = x_center + bbox_new_w / 2
+        else:
+            bbox[0] = x_center + bbox_new_w / 2
+            bbox[2] = x_center - bbox_new_w / 2
+
+        if bbox[1] < bbox[3]:
+            bbox[1] = y_center - bbox_new_h / 2
+            bbox[3] = y_center + bbox_new_h / 2
+        else:
+            bbox[1] = y_center + bbox_new_h / 2
+            bbox[3] = y_center - bbox_new_h / 2
 
         if self.velocity is not None:
             pred_direction = self.velocity
             #translate_vec = pred_direction * np.sqrt((bbox[2] - bbox[0])**2 + (bbox[3] - bbox[1])**2)
             #translate_vec = pred_direction * np.sqrt((np.abs(bbox[2] - bbox[0])+np.abs(bbox_x_range*2))**2 + (np.abs(bbox[3] - bbox[1])+np.abs(bbox_y_range*2))**2)
-            translate_vec = pred_direction * np.sqrt((bbox_x_range/2)**2 + (bbox_y_range/2)**2)
+            translate_vec = pred_direction * np.sqrt((bbox_new_w/2)**2 + (bbox_new_h/2)**2)
             bbox[0] += translate_vec[1]
             bbox[1] += translate_vec[0]
             bbox[2] += translate_vec[1]
