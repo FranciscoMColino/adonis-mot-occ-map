@@ -7,7 +7,7 @@ class KalmanBoxTracker(object):
     """
     count = 0
 
-    def __init__(self, bbox, delta_t=3, orig=False, lost_growth_rate=99999):
+    def __init__(self, bbox, ignore_t=1, delta_t=3, orig=False, lost_growth_rate=99999):
         """
         Initialises a tracker using initial bounding box.
 
@@ -47,6 +47,7 @@ class KalmanBoxTracker(object):
         self.observations = dict()
         self.history_observations = []
         self.velocity = None
+        self.ignore_t = ignore_t
         self.delta_t = delta_t
 
         self.lost_growth_rate = 0.01
@@ -60,17 +61,26 @@ class KalmanBoxTracker(object):
         if bbox is not None:
             if self.last_observation.sum() >= 0:  # no previous observation
                 previous_box = None
-                for i in range(self.delta_t):
+                velocities = np.zeros((self.delta_t, 2))
+                for i in range(self.ignore_t, self.delta_t):
                     dt = self.delta_t - i
                     if self.age - dt in self.observations:
                         previous_box = self.observations[self.age-dt]
-                        break
-                if previous_box is None:
-                    previous_box = self.last_observation
+                        velocities[i] = speed_direction(previous_box, bbox)
+                #if previous_box is None:
+                #    previous_box = self.last_observation
+                
+                # remove the element with all zeros
+                velocities = velocities[~np.all(velocities == 0, axis=1)]
+                if len(velocities) > 0:
+                    self.velocity = np.mean(velocities, axis=0)
+                else:
+                    self.velocity = speed_direction(self.last_observation, bbox)
+
                 """
                   Estimate the track speed direction with observations \Delta t steps away
                 """
-                self.velocity = speed_direction(previous_box, bbox)
+                #self.velocity = speed_direction(previous_box, bbox)
             
             """
               Insert new observations. This is a ugly way to maintain both self.observations
@@ -129,8 +139,8 @@ class KalmanBoxTracker(object):
         self.history.append(convert_x_to_bbox(self.kf.x))
 
         bbox = self.history[-1][0]
-        #if self.time_since_update > self.start_growth_t and bbox is not None:
-        #    self.grow_bbox(bbox)
+        if self.time_since_update > self.start_growth_t and bbox is not None:
+            self.grow_bbox(bbox)
 
         return [bbox]
     

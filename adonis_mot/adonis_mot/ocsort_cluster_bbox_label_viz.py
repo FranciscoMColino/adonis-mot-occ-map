@@ -56,7 +56,8 @@ class ClusterBoundingBoxViz(Node):
         self.ocsort = VOCSort(
             #det_thresh=0.5, 
             iou_threshold=0.05, # 0.05
-            delta_t=5,          # 1
+            ignore_t=5,
+            delta_t=25,          # 1
             min_hits=3,
             max_age=60,
             inertia=0.6,        # 0.8

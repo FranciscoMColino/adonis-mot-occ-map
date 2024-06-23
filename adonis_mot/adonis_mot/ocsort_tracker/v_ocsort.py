@@ -22,7 +22,7 @@ ASSO_FUNCS = {  "iou": iou_batch,
 
 
 class VOCSort(object):
-    def __init__(self, max_age=30, min_hits=3, iou_threshold=0.3, delta_t=3, asso_func="iou", inertia=0.2):
+    def __init__(self, max_age=30, min_hits=3, iou_threshold=0.3, ignore_t=1, delta_t=3, asso_func="iou", inertia=0.2):
         """
         Sets key parameters for SORT
         """
@@ -31,6 +31,7 @@ class VOCSort(object):
         self.iou_threshold = iou_threshold
         self.trackers = []
         self.frame_count = 0
+        self.ignore_t = ignore_t
         self.delta_t = delta_t
         self.asso_func = ASSO_FUNCS[asso_func]
         self.inertia = inertia
@@ -97,7 +98,7 @@ class VOCSort(object):
             self.trackers[m].update(None)
 
         for i in unmatched_dets:
-            trk = KalmanBoxTracker(dets[i, :], delta_t=self.delta_t)
+            trk = KalmanBoxTracker(dets[i, :], ignore_t=self.ignore_t, delta_t=self.delta_t)
             self.trackers.append(trk)
         i = len(self.trackers)
         for trk in reversed(self.trackers):
