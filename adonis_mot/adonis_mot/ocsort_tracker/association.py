@@ -273,7 +273,7 @@ def associate_old_pref(detections, trackers, iou_threshold, velocities, previous
 
     if min(iou_matrix.shape) > 0:
         # Total cost is a combination of IOU, angle difference, and age
-        total_cost = -(iou_matrix + angle_diff_cost) + age_cost
+        total_cost = -(iou_matrix + angle_diff_cost + age_cost)
         a = (iou_matrix > iou_threshold).astype(np.int32)
         if a.sum(1).max() == 1 and a.sum(0).max() == 1:
             matched_indices = np.stack(np.where(a), axis=1)

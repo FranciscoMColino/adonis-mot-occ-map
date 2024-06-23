@@ -50,13 +50,13 @@ class KalmanBoxTracker(object):
         self.ignore_t = ignore_t
         self.delta_t = delta_t
 
-        self.lost_growth_rate = 0.01
+        self.lost_growth_rate = 0.015
         self.start_growth_t = 0
         self.start_growth_boost = 3
 
         self.box_dims = None
 
-    def get_avg_box_dims(self, start_dt=0, end_dt=5):
+    def get_avg_box_dims(self, start_dt=0, end_dt=15):
         if len(self.history_observations) == 0:
             return None
         box_dims = []
