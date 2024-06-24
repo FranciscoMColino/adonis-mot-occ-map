@@ -86,7 +86,42 @@ class KalmanBoxTracker(object):
         bbox[2] = x_center + bbox_w / 2
         bbox[3] = y_center + bbox_h / 2
         return bbox
+    
+    def interval_mean_speed_direction(self, bbox, start_delta_t=30, end_delta_t=60):
 
+        previous_box = None
+        velocities = np.zeros((end_delta_t - start_delta_t, 2))
+        for i in range(start_delta_t, end_delta_t):
+            dt = end_delta_t - i
+            if self.age - dt in self.observations:
+                previous_box = self.observations[self.age-dt]
+                index = i - start_delta_t
+                velocities[index] = speed_direction(previous_box, bbox)
+
+        velocities = velocities[~np.all(velocities == 0, axis=1)]
+
+        if len(velocities) > 0:
+            velocity = np.mean(velocities, axis=0)
+        else:
+            velocity = speed_direction(self.last_observation, bbox)
+
+        return velocity
+
+    def delta_speed_direction(self, bbox, delta_t=3):
+        previous_box = None
+        for i in range(delta_t):
+            dt = delta_t - i
+            if self.age - dt in self.observations:
+                previous_box = self.observations[self.age-dt]
+                break
+        if previous_box is None:
+            previous_box = self.last_observation
+        """
+            Estimate the track speed direction with observations \Delta t steps away
+        """
+        velocity = speed_direction(previous_box, bbox)
+        return velocity
+    
     def update(self, bbox):
         """
         Updates the state vector with observed bbox.
@@ -96,27 +131,11 @@ class KalmanBoxTracker(object):
             self.update_mean(bbox)
 
             if self.last_observation.sum() >= 0:  # no previous observation
-                previous_box = None
-                velocities = np.zeros((self.delta_t, 2))
-                for i in range(self.ignore_t, self.delta_t):
-                    dt = self.delta_t - i
-                    if self.age - dt in self.observations:
-                        previous_box = self.observations[self.age-dt]
-                        velocities[i] = speed_direction(previous_box, bbox)
-                #if previous_box is None:
-                #    previous_box = self.last_observation
-                
-                # remove the element with all zeros
-                velocities = velocities[~np.all(velocities == 0, axis=1)]
-                if len(velocities) > 0:
-                    self.velocity = np.mean(velocities, axis=0)
-                else:
-                    self.velocity = speed_direction(self.last_observation, bbox)
-
                 """
-                  Estimate the track speed direction with observations \Delta t steps away
+                  Estimate the track speed direction
                 """
-                #self.velocity = speed_direction(previous_box, bbox)
+                #self.velocity = self.delta_speed_direction(bbox, self.delta_t)
+                self.velocity = self.interval_mean_speed_direction(bbox, self.ignore_t, self.delta_t)
             
             """
               Insert new observations. This is a ugly way to maintain both self.observations

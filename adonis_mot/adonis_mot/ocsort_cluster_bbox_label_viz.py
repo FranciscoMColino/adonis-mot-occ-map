@@ -56,8 +56,8 @@ class ClusterBoundingBoxViz(Node):
         self.ocsort = VOCSort(
             #det_thresh=0.5, 
             iou_threshold=0.02, # 0.05
-            ignore_t=5,
-            delta_t=15,          # 1
+            ignore_t=15,
+            delta_t=45,          # 1
             min_hits=5,
             max_age=60,
             inertia=0.6,        # 0.8
@@ -213,10 +213,6 @@ class ClusterBoundingBoxViz(Node):
             line_set.colors = o3d.utility.Vector3dVector([(1, 0, 0)])
             self.vis.add_geometry(line_set, reset_bounding_box=False)
 
-
-
-            
-
     def callback(self, msg):
         self.vis.clear_geometries()
         self.vis.add_geometry(o3d.geometry.TriangleMesh.create_coordinate_frame(size=0.5), reset_bounding_box=False)
@@ -228,7 +224,6 @@ class ClusterBoundingBoxViz(Node):
 
         tracking_res = self.ocsort.update(bboxes_to_track)
         tracking_ids = tracking_res[:, 4]
-
     
         self.draw_kf_predict(self.ocsort.get_trackers())
         self.draw_mean_bbox(self.ocsort.get_trackers(), tracking_ids)
