@@ -169,8 +169,10 @@ class KalmanBoxTracker(object):
             bbox_w = np.abs(bbox[2] - bbox[0])
             bbox_h = np.abs(bbox[3] - bbox[1])
 
-        bbox_w_increase = bbox_w * self.lost_growth_rate * (self.time_since_update - self.start_growth_t + self.start_growth_boost)
-        bbox_h_increase = bbox_h * self.lost_growth_rate * (self.time_since_update - self.start_growth_t + self.start_growth_boost)
+        bbox_mean_size = (bbox_w + bbox_h) / 2
+
+        bbox_w_increase = bbox_mean_size * self.lost_growth_rate * (self.time_since_update - self.start_growth_t + self.start_growth_boost)
+        bbox_h_increase = bbox_mean_size * self.lost_growth_rate * (self.time_since_update - self.start_growth_t + self.start_growth_boost)
 
         bbox_new_w = bbox_w + bbox_w_increase
         bbox_new_h = bbox_h + bbox_h_increase
@@ -193,7 +195,7 @@ class KalmanBoxTracker(object):
             pred_direction = self.velocity
             #translate_vec = pred_direction * np.sqrt((bbox[2] - bbox[0])**2 + (bbox[3] - bbox[1])**2)
             #translate_vec = pred_direction * np.sqrt((np.abs(bbox[2] - bbox[0])+np.abs(bbox_x_range*2))**2 + (np.abs(bbox[3] - bbox[1])+np.abs(bbox_y_range*2))**2)
-            translate_vec = pred_direction * np.sqrt((bbox_w_increase)**2 + (bbox_h_increase)**2)
+            translate_vec = pred_direction * np.sqrt((bbox_w_increase/2)**2 + (bbox_h_increase/2)**2)
             bbox[0] += translate_vec[1]
             bbox[1] += translate_vec[0]
             bbox[2] += translate_vec[1]
