@@ -60,7 +60,7 @@ class ClusterBoundingBoxViz(Node):
             delta_t=120,          # this is a bit too high
             min_hits=5,
             max_age=60,
-            inertia=0.6,        # 0.8
+            inertia=0.2,        # 0.8
         )
 
     def setup_visualizer(self):
