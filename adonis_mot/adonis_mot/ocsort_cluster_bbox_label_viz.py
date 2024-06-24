@@ -136,6 +136,45 @@ class ClusterBoundingBoxViz(Node):
             bbox_o3d.color = color
             self.vis.add_geometry(bbox_o3d, reset_bounding_box=False)
 
+    def draw_mean_bbox(self, trackers, track_ids):
+        for trk in trackers:
+            track_id = int(trk.id) + 1
+
+            if track_ids is not None and track_id not in track_ids:
+                continue
+
+            if track_id not in self.id_to_color:
+                self.id_to_color[track_id] = np.random.rand(3)
+
+            bbox = trk.get_mean_bbox()
+
+            if bbox is None:
+                continue
+
+            x1, y1, x2, y2 = bbox
+            z1, z2 = 0, 3
+
+            color = self.id_to_color[track_id]
+            points = np.array([
+                [x1, y1, z1],
+                [x1, y1, z2],
+                [x1, y2, z1],
+                [x1, y2, z2],
+                [x2, y1, z1],
+                [x2, y1, z2],
+                [x2, y2, z1],
+                [x2, y2, z2],
+            ])
+            point_cloud = o3d.geometry.PointCloud()
+            point_cloud.points = o3d.utility.Vector3dVector(points)
+            point_cloud.paint_uniform_color(color)
+            self.vis.add_geometry(point_cloud, reset_bounding_box=False)
+
+            bbox_o3d = point_cloud.get_axis_aligned_bounding_box()
+            bbox_o3d.color = color
+            self.vis.add_geometry(bbox_o3d, reset_bounding_box=False)
+
+
     def callback(self, msg):
         self.vis.clear_geometries()
         self.vis.add_geometry(o3d.geometry.TriangleMesh.create_coordinate_frame(size=0.5), reset_bounding_box=False)
@@ -150,6 +189,7 @@ class ClusterBoundingBoxViz(Node):
 
     
         self.draw_kf_predict(self.ocsort.get_trackers())
+        self.draw_mean_bbox(self.ocsort.get_trackers(), tracking_ids)
 
         for i in range(len(ember_cluster_array)):
             ember_cluster = ember_cluster_array[i]

@@ -54,20 +54,38 @@ class KalmanBoxTracker(object):
         self.start_growth_t = 0
         self.start_growth_boost = 3
 
+        self.mean_w = None
+        self.mean_h = None
+        self.mean_count = 0
+
         self.box_dims = None
 
-    def get_avg_box_dims(self, start_dt=0, end_dt=15):
-        if len(self.history_observations) == 0:
+    def update_mean(self, bbox):
+        self.mean_count += 1
+        if self.mean_w is None:
+            self.mean_w = np.abs(bbox[2] - bbox[0])
+            self.mean_h = np.abs(bbox[3] - bbox[1])
+        else:
+            self.mean_w = (self.mean_w * (self.mean_count - 1) + np.abs(bbox[2] - bbox[0])) / self.mean_count
+            self.mean_h = (self.mean_h * (self.mean_count - 1) + np.abs(bbox[3] - bbox[1])) / self.mean_count
+
+    def get_mean_bbox(self):
+        bbox = self.get_state()[0]
+        if bbox is None:
             return None
-        box_dims = []
-        for i in range(start_dt, end_dt):
-            dt = end_dt - i
-            if self.age - dt in self.observations:
-                box = self.observations[self.age-dt]
-                box_dims.append([np.abs(box[2] - box[0]), np.abs(box[3] - box[1])])
-        if len(box_dims) == 0:
-            return None
-        return np.mean(box_dims, axis=0)
+        x_center = (bbox[2] + bbox[0]) / 2
+        y_center = (bbox[3] + bbox[1]) / 2
+
+        if self.mean_w is None or self.mean_h is None:
+            return bbox
+
+        bbox_w = self.mean_w
+        bbox_h = self.mean_h
+        bbox[0] = x_center - bbox_w / 2
+        bbox[1] = y_center - bbox_h / 2
+        bbox[2] = x_center + bbox_w / 2
+        bbox[3] = y_center + bbox_h / 2
+        return bbox
 
     def update(self, bbox):
         """
@@ -110,10 +128,10 @@ class KalmanBoxTracker(object):
             self.hits += 1
             self.hit_streak += 1
             self.kf.update(convert_bbox_to_z(bbox))
-            self.box_dims = np.array([bbox[2] - bbox[0], bbox[3] - bbox[1]])
+
+            self.update_mean(bbox)
         else:
             self.kf.update(bbox)
-            self.box_dims = self.get_avg_box_dims()
 
     def grow_bbox(self, bbox):
 
