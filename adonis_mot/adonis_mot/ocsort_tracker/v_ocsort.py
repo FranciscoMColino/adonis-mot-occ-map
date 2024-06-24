@@ -70,8 +70,8 @@ class VOCSort(object):
         k_observations = np.array([k_previous_obs(trk.observations, trk.age, self.delta_t) for trk in self.trackers])
         tracker_ages = np.array([trk.age for trk in self.trackers])
 
-        matched, unmatched_dets, unmatched_trks = associate(
-            dets, trks, self.iou_threshold, velocities, k_observations, self.inertia)
+        matched, unmatched_dets, unmatched_trks = associate_old_pref(
+            dets, trks, self.iou_threshold, velocities, k_observations, self.inertia, tracker_ages)
         for m in matched:
             self.trackers[m[1]].update(dets[m[0], :])
 
