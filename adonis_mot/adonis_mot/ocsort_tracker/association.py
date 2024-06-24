@@ -265,7 +265,7 @@ def associate_old_pref(detections, trackers, iou_threshold, velocities, previous
     angle_diff_cost = angle_diff_cost * scores
 
     # Create an age cost matrix where older trackers have lower cost
-    age_weight = 0.5
+    age_weight = 0 #0.9
     max_age = np.max(tracker_ages) + 1
     age_cost = (max_age - tracker_ages) / max_age
     age_cost = np.repeat(age_cost[:, np.newaxis], detections.shape[0], axis=1).T

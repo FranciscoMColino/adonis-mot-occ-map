@@ -50,9 +50,9 @@ class KalmanBoxTracker(object):
         self.ignore_t = ignore_t
         self.delta_t = delta_t
 
-        self.lost_growth_rate = 0.01
+        self.lost_growth_rate = 0.05
         self.start_growth_t = 0
-        self.start_growth_boost = 3
+        self.start_growth_boost = 1
 
         self.mean_w = None
         self.mean_h = None
@@ -92,6 +92,9 @@ class KalmanBoxTracker(object):
         Updates the state vector with observed bbox.
         """
         if bbox is not None:
+
+            self.update_mean(bbox)
+
             if self.last_observation.sum() >= 0:  # no previous observation
                 previous_box = None
                 velocities = np.zeros((self.delta_t, 2))
@@ -127,9 +130,8 @@ class KalmanBoxTracker(object):
             self.history = []
             self.hits += 1
             self.hit_streak += 1
-            self.kf.update(convert_bbox_to_z(bbox))
 
-            self.update_mean(bbox)
+            self.kf.update(convert_bbox_to_z(bbox))            
         else:
             self.kf.update(bbox)
 
@@ -141,9 +143,9 @@ class KalmanBoxTracker(object):
         x_center = (bbox[2] + bbox[0]) / 2
         y_center = (bbox[3] + bbox[1]) / 2
 
-        if self.box_dims is not None:
-            bbox_w = self.box_dims[0]
-            bbox_h = self.box_dims[1]
+        if self.mean_h is not None and self.mean_w is not None:
+            bbox_w = self.mean_w
+            bbox_h = self.mean_h
         else:
             bbox_w = np.abs(bbox[2] - bbox[0])
             bbox_h = np.abs(bbox[3] - bbox[1])
@@ -172,7 +174,7 @@ class KalmanBoxTracker(object):
             pred_direction = self.velocity
             #translate_vec = pred_direction * np.sqrt((bbox[2] - bbox[0])**2 + (bbox[3] - bbox[1])**2)
             #translate_vec = pred_direction * np.sqrt((np.abs(bbox[2] - bbox[0])+np.abs(bbox_x_range*2))**2 + (np.abs(bbox[3] - bbox[1])+np.abs(bbox_y_range*2))**2)
-            translate_vec = pred_direction * np.sqrt((bbox_new_w/2)**2 + (bbox_new_h/2)**2)
+            translate_vec = pred_direction * np.sqrt((bbox_w_increase)**2 + (bbox_h_increase)**2)
             bbox[0] += translate_vec[1]
             bbox[1] += translate_vec[0]
             bbox[2] += translate_vec[1]
