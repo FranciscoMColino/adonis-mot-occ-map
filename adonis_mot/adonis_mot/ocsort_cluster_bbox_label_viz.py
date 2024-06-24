@@ -289,6 +289,7 @@ class ClusterBoundingBoxViz(Node):
         image = self.vis.capture_screen_float_buffer(do_render=True)
         image = np.asarray(image) * 255
         image = image.astype(np.uint8)
+        image = cv2.cvtColor(image, cv2.COLOR_RGB2BGR)
         return image
 
     def add_text_overlay(self, image, tracking_res):
@@ -307,7 +308,7 @@ class ClusterBoundingBoxViz(Node):
             text = f"ID: {track_id}"
 
             # Calculate the farthest corner of the bounding box
-            farthest_corner_3d = np.array([bbox[2], bbox[3], 0])  # Assuming z=0 for 2D bbox corners
+            farthest_corner_3d = np.array([bbox[0], bbox[1], 0])  # Assuming z=0 for 2D bbox corners
             farthest_corner_2d = self.project_to_2d(farthest_corner_3d, intrinsic, extrinsic)
 
             # Overlay text on the image
