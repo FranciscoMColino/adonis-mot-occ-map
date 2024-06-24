@@ -50,7 +50,7 @@ class KalmanBoxTracker(object):
         self.ignore_t = ignore_t
         self.delta_t = delta_t
 
-        self.lost_growth_rate = 0.05
+        self.lost_growth_rate = 0.1
         self.start_growth_t = 0
         self.start_growth_boost = 1
 

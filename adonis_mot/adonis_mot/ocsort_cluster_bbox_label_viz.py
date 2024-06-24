@@ -57,7 +57,7 @@ class ClusterBoundingBoxViz(Node):
             #det_thresh=0.5, 
             iou_threshold=0.02, # 0.05
             ignore_t=30,
-            delta_t=60,          # 1
+            delta_t=120,          # this is a bit too high
             min_hits=5,
             max_age=60,
             inertia=0.6,        # 0.8
