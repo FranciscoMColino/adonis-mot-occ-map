@@ -46,6 +46,11 @@ class KalmanBoxTracker(object):
         self.last_observation = np.array([-1, -1, -1, -1, -1])  # placeholder
         self.observations = dict()
         self.history_observations = []
+
+        self.last_centroid = np.array([-1, -1])  # placeholder
+        self.observed_centroids = dict()
+        self.history_centroids = []
+
         self.velocity = None
         self.ignore_t = ignore_t
         self.delta_t = delta_t
@@ -87,6 +92,25 @@ class KalmanBoxTracker(object):
         bbox[3] = y_center + bbox_h / 2
         return bbox
     
+    def interval_centroid_speed_direction(self, centroid, start_delta_t=30, end_delta_t=60):     
+        previous_centroid = None
+        velocities = np.zeros((end_delta_t - start_delta_t, 2))
+        for i in range(start_delta_t, end_delta_t):
+            dt = end_delta_t - i
+            if self.age - dt in self.observed_centroids:
+                previous_centroid = self.observed_centroids[self.age-dt]
+                index = i - start_delta_t
+                velocities[index] = centroid_speed_direction(previous_centroid, centroid)
+
+        velocities = velocities[~np.all(velocities == 0, axis=1)]
+
+        if len(velocities) > 0:
+            velocity = np.mean(velocities, axis=0)
+        else:
+            velocity = centroid_speed_direction(self.last_centroid, centroid)
+
+        return velocity
+    
     def interval_mean_speed_direction(self, bbox, start_delta_t=30, end_delta_t=60):
 
         previous_box = None
@@ -122,7 +146,9 @@ class KalmanBoxTracker(object):
         velocity = speed_direction(previous_box, bbox)
         return velocity
     
-    def update(self, bbox):
+
+    
+    def update(self, bbox, centroid=None):
         """
         Updates the state vector with observed bbox.
         """
@@ -134,8 +160,11 @@ class KalmanBoxTracker(object):
                 """
                   Estimate the track speed direction
                 """
-                #self.velocity = self.delta_speed_direction(bbox, self.delta_t)
-                self.velocity = self.interval_mean_speed_direction(bbox, self.ignore_t, self.delta_t)
+                if centroid is not None:
+                    self.velocity = self.interval_centroid_speed_direction(centroid, self.ignore_t, self.delta_t)
+                else:
+                    #self.velocity = self.delta_speed_direction(bbox, self.delta_t)
+                    self.velocity = self.interval_mean_speed_direction(bbox, self.ignore_t, self.delta_t)
             
             """
               Insert new observations. This is a ugly way to maintain both self.observations
@@ -144,6 +173,11 @@ class KalmanBoxTracker(object):
             self.last_observation = bbox
             self.observations[self.age] = bbox
             self.history_observations.append(bbox)
+
+            if centroid is not None:
+                self.last_centroid = centroid
+                self.observed_centroids[self.age] = centroid
+                self.history_centroids.append(centroid)
 
             self.time_since_update = 0
             self.history = []
@@ -199,7 +233,6 @@ class KalmanBoxTracker(object):
 
             #translate_vec = pred_direction * np.sqrt((bbox_w_increase/4)**2 + (bbox_h_increase/4)**2)
             
-
             bbox[0] += pred_direction[1] * bbox_mean_increase/2
             bbox[1] += pred_direction[0] * bbox_mean_increase/2
             bbox[2] += pred_direction[1] * bbox_mean_increase/2

@@ -37,7 +37,7 @@ class VOCSort(object):
         self.inertia = inertia
         KalmanBoxTracker.count = 0
 
-    def update(self, dets):
+    def update(self, dets, centroids=None):
         """
         Params:
         dets - a numpy array of detections in the format [[x1,y1,x2,y2],[x1,y1,x2,y2],...]
@@ -88,7 +88,7 @@ class VOCSort(object):
                     det_ind, trk_ind = unmatched_dets[m[0]], unmatched_trks[m[1]]
                     if iou_left[m[0], m[1]] < self.iou_threshold:
                         continue
-                    self.trackers[trk_ind].update(dets[det_ind, :])
+                    self.trackers[trk_ind].update(dets[det_ind, :], centroids[det_ind])
                     to_remove_det_indices.append(det_ind)
                     to_remove_trk_indices.append(trk_ind)
                 unmatched_dets = np.setdiff1d(unmatched_dets, np.array(to_remove_det_indices))

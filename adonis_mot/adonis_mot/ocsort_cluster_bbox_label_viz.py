@@ -57,7 +57,7 @@ class ClusterBoundingBoxViz(Node):
             #det_thresh=0.5, 
             iou_threshold=0.02, # 0.05
             ignore_t=30,
-            delta_t=120,          # this is a bit too high
+            delta_t=90,          # this is a bit too high
             min_hits=5,
             max_age=60,
             inertia=0.2,        # 0.8
@@ -221,9 +221,9 @@ class ClusterBoundingBoxViz(Node):
 
         bboxes_array = np.array([get_2d_bbox_from_3d_bbox(np.array([[p.x, p.y, p.z] for p in ember_cluster.bounding_box.points])) for ember_cluster in ember_cluster_array])
         bboxes_to_track = np.array([get_track_struct_from_2d_bbox(bbox) for bbox in bboxes_array])
-        centroids_array = np.array([[cluster.centroid.x, cluster.centroid.y, cluster.centroid.z] for cluster in ember_cluster_array])
+        centroids2d_array = np.array([[cluster.centroid.x, cluster.centroid.y] for cluster in ember_cluster_array])
 
-        tracking_res = self.ocsort.update(bboxes_to_track)
+        tracking_res = self.ocsort.update(bboxes_to_track, centroids2d_array)
         tracking_ids = tracking_res[:, 4]
     
         self.draw_kf_predict(self.ocsort.get_trackers())
