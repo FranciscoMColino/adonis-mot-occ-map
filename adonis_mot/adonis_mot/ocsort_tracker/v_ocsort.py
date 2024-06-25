@@ -37,6 +37,121 @@ class VOCSort(object):
         self.inertia = inertia
         KalmanBoxTracker.count = 0
 
+    # use the inertia association as first association and then growth as second association
+    def update_2(self, dets, centroids=None):
+        """
+        Params:
+        dets - a numpy array of detections in the format [[x1,y1,x2,y2],[x1,y1,x2,y2],...]
+        Requires: this method must be called once for each frame even with empty detections (use np.empty((0, 4)) for frames without detections).
+        Returns a similar array, where the last column is the object ID.
+        NOTE: The number of objects returned may differ from the number of detections provided.
+        """
+
+        if dets is None:
+            return np.empty((0, 5))
+        elif dets.shape[1] == 4:
+            dets = np.concatenate((dets, np.ones((dets.shape[0], 1))), axis=1)
+
+        self.frame_count += 1
+
+        trks = np.zeros((len(self.trackers), 5))
+        grown_trks = np.zeros((len(self.trackers), 5))
+        to_del = []
+        ret = []
+        for t, trk in enumerate(trks):
+            pos = self.trackers[t].predict()[0]
+            trk[:] = [pos[0], pos[1], pos[2], pos[3], 0]
+            if np.any(np.isnan(pos)):
+                to_del.append(t)
+                grown_trks[t] = trk
+            else:
+                grown_trks[t] = self.trackers[t].grow_bbox(trk)
+        trks = np.ma.compress_rows(np.ma.masked_invalid(trks))
+        grown_trks = np.ma.compress_rows(np.ma.masked_invalid(grown_trks))
+        for t in reversed(to_del):
+            self.trackers.pop(t)
+
+        last_boxes = np.array([trk.last_observation for trk in self.trackers])
+        tracker_ages = np.array([trk.age for trk in self.trackers])
+        velocities = np.array([trk.velocity if trk.velocity is not None else np.array((0, 0)) for trk in self.trackers])
+        k_observations = np.array([k_previous_obs(trk.observations, trk.age, self.delta_t) for trk in self.trackers])
+
+        matched_first_as, unmatched_dets_first_as, unmatched_trks_first_as = associate_inertia_boxes(
+            dets, trks, self.iou_threshold, velocities, k_observations, self.inertia, tracker_ages)
+        for m in matched_first_as:
+            self.trackers[m[1]].update(dets[m[0], :])
+        
+        unmatched_dets_first_to_second_map = dict()
+        for i in range(len(unmatched_dets_first_as)):
+            unmatched_dets_first_to_second_map[i] = unmatched_dets_first_as[i]
+        
+        unmatched_trks_first_to_second_map = dict()
+        for i in range(len(unmatched_trks_first_as)):
+            unmatched_trks_first_to_second_map[i] = unmatched_trks_first_as[i]
+
+        growth_iou_threshold = self.iou_threshold * 0.2 # TODO this should be a parameter and not hardcoded
+        dets_sec_as = np.array([dets[i] for i in unmatched_dets_first_as])
+        trks_sec_as = np.array([grown_trks[i] for i in unmatched_trks_first_as])
+        tracker_ages_sec_as = np.array([self.trackers[i].age for i in unmatched_trks_first_as])
+
+        matched_sec_as, unmatched_dets_sec_as, unmatched_trks_sec_as = associate_growth_boxes(
+            dets_sec_as, trks_sec_as, growth_iou_threshold, tracker_ages_sec_as)
+        for m in matched_sec_as:
+            tracker_ind = unmatched_trks_first_as[m[1]]
+            self.trackers[tracker_ind].update(dets_sec_as[m[0], :])
+
+        unmatched_dets = np.array([unmatched_dets_first_to_second_map[i] for i in unmatched_dets_sec_as])
+        unmatched_trks = np.array([unmatched_trks_first_to_second_map[i] for i in unmatched_trks_sec_as])
+
+        matched_ids_first_as = [self.trackers[m[1]].id+1 for m in matched_first_as]
+        matched_ids_sec_as = [self.trackers[unmatched_trks_first_as[m[1]]].id+1 for m in matched_sec_as]
+
+        print(f'Mathed ids, first association: {matched_ids_first_as}')
+        print(f'Mathed ids, second association: {matched_ids_sec_as}')
+        print(f'Unmatched dets: {len(unmatched_dets)}, unmatched trks: {len(unmatched_trks)}')
+
+        # third round of association, simple IoU matching
+        # TODO use different IoU thresholds for different rounds
+        if unmatched_dets.shape[0] > 0 and unmatched_trks.shape[0] > 0:
+            left_dets = dets[unmatched_dets]
+            left_trks = last_boxes[unmatched_trks]
+            iou_left = self.asso_func(left_dets, left_trks)
+            iou_left = np.array(iou_left)
+            if iou_left.max() > self.iou_threshold:
+                rematched_indices = linear_assignment(-iou_left)
+                to_remove_det_indices = []
+                to_remove_trk_indices = []
+                for m in rematched_indices:
+                    det_ind, trk_ind = unmatched_dets[m[0]], unmatched_trks[m[1]]
+                    if iou_left[m[0], m[1]] < self.iou_threshold:
+                        continue
+                    self.trackers[trk_ind].update(dets[det_ind, :], centroids[det_ind])
+                    to_remove_det_indices.append(det_ind)
+                    to_remove_trk_indices.append(trk_ind)
+                unmatched_dets = np.setdiff1d(unmatched_dets, np.array(to_remove_det_indices))
+                unmatched_trks = np.setdiff1d(unmatched_trks, np.array(to_remove_trk_indices))
+
+        for m in unmatched_trks:
+            self.trackers[m].update(None)
+
+        for i in unmatched_dets:
+            trk = KalmanBoxTracker(dets[i, :], ignore_t=self.ignore_t, delta_t=self.delta_t)
+            self.trackers.append(trk)
+        i = len(self.trackers)
+        for trk in reversed(self.trackers):
+            if trk.last_observation.sum() < 0:
+                d = trk.get_state()[0]
+            else:
+                d = trk.last_observation[:4]
+            if (trk.time_since_update < 1) and (trk.hit_streak >= self.min_hits or self.frame_count <= self.min_hits):
+                ret.append(np.concatenate((d, [trk.id+1])).reshape(1, -1))
+            i -= 1
+            if trk.time_since_update > self.max_age:
+                self.trackers.pop(i)
+        if len(ret) > 0:
+            return np.concatenate(ret)
+        return np.empty((0, 5))
+
     def update(self, dets, centroids=None):
         """
         Params:
@@ -70,39 +185,49 @@ class VOCSort(object):
         for t in reversed(to_del):
             self.trackers.pop(t)
 
-        #velocities = np.array([trk.velocity if trk.velocity is not None else np.array((0, 0)) for trk in self.trackers])
         last_boxes = np.array([trk.last_observation for trk in self.trackers])
-        #k_observations = np.array([k_previous_obs(trk.observations, trk.age, self.delta_t) for trk in self.trackers])
         tracker_ages = np.array([trk.age for trk in self.trackers])
 
-        #matched, unmatched_dets, unmatched_trks = associate_old_pref(
-        #    dets, trks, self.iou_threshold, velocities, k_observations, self.inertia, tracker_ages)
-        matched, unmatched_dets, unmatched_trks = associate_growth_boxes(
-            dets, grown_trks, self.iou_threshold, tracker_ages)
-        for m in matched:
+        growth_iou_threshold = self.iou_threshold * 0.2 # TODO this should be a parameter and not hardcoded
+        matched_first_as, unmatched_dets_first_as, unmatched_trks_first_as = associate_growth_boxes(
+            dets, grown_trks, growth_iou_threshold, tracker_ages)
+        for m in matched_first_as:
             self.trackers[m[1]].update(dets[m[0], :])
 
         unmatched_dets_first_to_second_map = dict()
-        for i in range(len(unmatched_dets)):
-            unmatched_dets_first_to_second_map[i] = unmatched_dets[i]
+        for i in range(len(unmatched_dets_first_as)):
+            unmatched_dets_first_to_second_map[i] = unmatched_dets_first_as[i]
         
         unmatched_trks_first_to_second_map = dict()
-        for i in range(len(unmatched_trks)):
-            unmatched_trks_first_to_second_map[i] = unmatched_trks[i]
+        for i in range(len(unmatched_trks_first_as)):
+            unmatched_trks_first_to_second_map[i] = unmatched_trks_first_as[i]
 
         # use the unmathced_trks to get the remaining trackers
         # sec_as = second association
-        dets_sec_as = np.array([dets[i] for i in unmatched_dets])
-        trks_sec_as = np.array([trks[i] for i in unmatched_trks])
-        k_observations_sec_as = np.array([k_previous_obs(self.trackers[i].observations, self.trackers[i].age, self.delta_t) for i in unmatched_trks])
-        velocities_sec_as = np.array([self.trackers[i].velocity if self.trackers[i].velocity is not None else np.array((0, 0)) for i in unmatched_trks])
-        tracker_ages_sec_as = np.array([self.trackers[i].age for i in unmatched_trks])
+        dets_sec_as = np.array([dets[i] for i in unmatched_dets_first_as])
+        trks_sec_as = np.array([trks[i] for i in unmatched_trks_first_as])
+        k_observations_sec_as = np.array([k_previous_obs(self.trackers[i].observations, self.trackers[i].age, self.delta_t) for i in unmatched_trks_first_as])
+        velocities_sec_as = np.array([self.trackers[i].velocity if self.trackers[i].velocity is not None else np.array((0, 0)) for i in unmatched_trks_first_as])
+        tracker_ages_sec_as = np.array([self.trackers[i].age for i in unmatched_trks_first_as])
 
         matched_sec_as, unmatched_dets_sec_as, unmatched_trks_sec_as = associate_inertia_boxes(
             dets_sec_as, trks_sec_as, self.iou_threshold, velocities_sec_as, k_observations_sec_as, self.inertia, tracker_ages_sec_as)
-        #for m in matched_second_asso:
-        #    self.trackers[m[1]].update(dets_second_asso[m[0], :])
+        for m in matched_sec_as:
+            tracker_ind = unmatched_trks_first_as[m[1]]
+            self.trackers[tracker_ind].update(dets_sec_as[m[0], :])
 
+        unmatched_dets = np.array([unmatched_dets_first_to_second_map[i] for i in unmatched_dets_sec_as])
+        unmatched_trks = np.array([unmatched_trks_first_to_second_map[i] for i in unmatched_trks_sec_as])
+
+        matched_ids_first_as = [self.trackers[m[1]].id+1 for m in matched_first_as]
+        matched_ids_sec_as = [self.trackers[unmatched_trks_first_as[m[1]]].id+1 for m in matched_sec_as]
+
+        print(f'Mathed ids, first association: {matched_ids_first_as}')
+        print(f'Mathed ids, second association: {matched_ids_sec_as}')
+        print(f'Unmatched dets: {len(unmatched_dets)}, unmatched trks: {len(unmatched_trks)}')
+
+        # third round of association, simple IoU matching
+        # TODO use different IoU thresholds for different rounds
         if unmatched_dets.shape[0] > 0 and unmatched_trks.shape[0] > 0:
             left_dets = dets[unmatched_dets]
             left_trks = last_boxes[unmatched_trks]

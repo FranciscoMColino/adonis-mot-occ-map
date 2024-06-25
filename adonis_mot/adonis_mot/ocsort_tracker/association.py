@@ -243,13 +243,13 @@ def associate_detections_to_trackers(detections,trackers,iou_threshold = 0.3):
 # this associate function is meant to prioritize IoU over the inertia association
 # this is implemented mainly to work with the growth box method
 def associate_growth_boxes(detections, trackers, iou_threshold, tracker_ages):
-    if len(trackers) == 0:
+    if len(trackers) == 0 or len(detections) == 0:
         return np.empty((0, 2), dtype=int), np.arange(len(detections)), np.empty((0, 5), dtype=int)
 
     iou_matrix = iou_batch(detections, trackers)
 
     # Create an age cost matrix where older trackers have lower cost
-    age_weight = -0.6
+    age_weight = -0.9
     max_age = np.max(tracker_ages) + 1
     age_cost = (max_age - tracker_ages) / max_age
     age_cost = np.repeat(age_cost[:, np.newaxis], detections.shape[0], axis=1).T

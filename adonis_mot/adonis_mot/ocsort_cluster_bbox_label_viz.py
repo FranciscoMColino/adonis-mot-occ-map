@@ -60,7 +60,7 @@ class ClusterBoundingBoxViz(Node):
             delta_t=90,          # this is a bit too high
             min_hits=5,
             max_age=60,
-            inertia=0.2,        # 0.8
+            inertia=0.5,        # 0.8
         )
 
     def setup_visualizer(self):
@@ -223,7 +223,7 @@ class ClusterBoundingBoxViz(Node):
         bboxes_to_track = np.array([get_track_struct_from_2d_bbox(bbox) for bbox in bboxes_array])
         centroids2d_array = np.array([[cluster.centroid.x, cluster.centroid.y] for cluster in ember_cluster_array])
 
-        tracking_res = self.ocsort.update(bboxes_to_track, centroids2d_array)
+        tracking_res = self.ocsort.update_2(bboxes_to_track, centroids2d_array)
         tracking_ids = tracking_res[:, 4]
     
         self.draw_kf_predict(self.ocsort.get_trackers())
