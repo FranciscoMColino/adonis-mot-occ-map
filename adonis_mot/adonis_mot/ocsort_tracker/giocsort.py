@@ -21,7 +21,7 @@ ASSO_FUNCS = {  "iou": iou_batch,
                 "ct_dist": ct_dist}
 
 
-class VOCSort(object):
+class GIOCSort(object):
     def __init__(self, max_age=30, min_hits=3, inertia_iou_threshold=0.2, growth_iou_threshold=0.1, default_iou_threshold=0.3,
                  ignore_t=1, delta_t=3, asso_func="iou", inertia=0.2, intertia_age_weight=0.5, growth_rate=0.1, growth_age_weight=0.5):
         """

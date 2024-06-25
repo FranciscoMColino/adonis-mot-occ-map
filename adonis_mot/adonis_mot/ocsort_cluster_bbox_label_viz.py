@@ -7,7 +7,7 @@ import open3d as o3d
 import cv2
 
 from .ocsort_tracker.ocsort import OCSort
-from .ocsort_tracker.v_ocsort import VOCSort
+from .ocsort_tracker.giocsort import GIOCSort
 from .ocsort_tracker.utils import convert_x_to_bbox
 
 def load_pointcloud_from_ros2_msg(msg):
@@ -53,7 +53,7 @@ class ClusterBoundingBoxViz(Node):
             0: (0.3, 0.3, 0.3),
         }
 
-        self.ocsort = VOCSort(
+        self.ocsort = GIOCSort(
             #det_thresh=0.5,
             inertia_iou_threshold=0.1,
             growth_iou_threshold=0.005,
