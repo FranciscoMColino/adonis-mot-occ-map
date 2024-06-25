@@ -38,7 +38,7 @@ class VOCSort(object):
         KalmanBoxTracker.count = 0
 
     # use the inertia association as first association and then growth as second association
-    def update_2(self, dets, centroids=None):
+    def update_v2(self, dets, centroids=None):
         """
         Params:
         dets - a numpy array of detections in the format [[x1,y1,x2,y2],[x1,y1,x2,y2],...]
@@ -71,6 +71,10 @@ class VOCSort(object):
         for t in reversed(to_del):
             self.trackers.pop(t)
 
+        """
+            FIRST round of association, based on inertia and tracker ages
+        """
+            
         last_boxes = np.array([trk.last_observation for trk in self.trackers])
         tracker_ages = np.array([trk.age for trk in self.trackers])
         velocities = np.array([trk.velocity if trk.velocity is not None else np.array((0, 0)) for trk in self.trackers])
@@ -89,6 +93,10 @@ class VOCSort(object):
         for i in range(len(unmatched_trks_first_as)):
             unmatched_trks_first_to_second_map[i] = unmatched_trks_first_as[i]
 
+        """
+            SECOND round of association, based on grown boxes and tracker ages
+        """
+        
         growth_iou_threshold = self.iou_threshold * 0.2 # TODO this should be a parameter and not hardcoded
         dets_sec_as = np.array([dets[i] for i in unmatched_dets_first_as])
         trks_sec_as = np.array([grown_trks[i] for i in unmatched_trks_first_as])
@@ -110,8 +118,10 @@ class VOCSort(object):
         print(f'Mathed ids, second association: {matched_ids_sec_as}')
         print(f'Unmatched dets: {len(unmatched_dets)}, unmatched trks: {len(unmatched_trks)}')
 
-        # third round of association, simple IoU matching
-        # TODO use different IoU thresholds for different rounds
+        """
+            THIRD round of association, simple IoU matching by OCR according to oc-sort original code
+            TODO use different IoU thresholds for different rounds
+        """
         if unmatched_dets.shape[0] > 0 and unmatched_trks.shape[0] > 0:
             left_dets = dets[unmatched_dets]
             left_trks = last_boxes[unmatched_trks]
@@ -152,7 +162,7 @@ class VOCSort(object):
             return np.concatenate(ret)
         return np.empty((0, 5))
 
-    def update(self, dets, centroids=None):
+    def update_v1(self, dets, centroids=None):
         """
         Params:
         dets - a numpy array of detections in the format [[x1,y1,x2,y2],[x1,y1,x2,y2],...]
@@ -185,6 +195,10 @@ class VOCSort(object):
         for t in reversed(to_del):
             self.trackers.pop(t)
 
+        """
+            FIRST round of association, based on growth and tracker ages
+        """
+            
         last_boxes = np.array([trk.last_observation for trk in self.trackers])
         tracker_ages = np.array([trk.age for trk in self.trackers])
 
@@ -201,6 +215,10 @@ class VOCSort(object):
         unmatched_trks_first_to_second_map = dict()
         for i in range(len(unmatched_trks_first_as)):
             unmatched_trks_first_to_second_map[i] = unmatched_trks_first_as[i]
+
+        """
+            SECOND round of association, based on inertia and tracker ages
+        """
 
         # use the unmathced_trks to get the remaining trackers
         # sec_as = second association
@@ -225,9 +243,11 @@ class VOCSort(object):
         print(f'Mathed ids, first association: {matched_ids_first_as}')
         print(f'Mathed ids, second association: {matched_ids_sec_as}')
         print(f'Unmatched dets: {len(unmatched_dets)}, unmatched trks: {len(unmatched_trks)}')
-
-        # third round of association, simple IoU matching
-        # TODO use different IoU thresholds for different rounds
+        
+        """
+            THIRD round of association, simple IoU matching by OCR according to oc-sort original code
+            TODO use different IoU thresholds for different rounds
+        """
         if unmatched_dets.shape[0] > 0 and unmatched_trks.shape[0] > 0:
             left_dets = dets[unmatched_dets]
             left_trks = last_boxes[unmatched_trks]
