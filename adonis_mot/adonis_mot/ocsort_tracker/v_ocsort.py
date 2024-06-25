@@ -54,6 +54,7 @@ class VOCSort(object):
         self.frame_count += 1
 
         trks = np.zeros((len(self.trackers), 5))
+        grown_trks = np.zeros((len(self.trackers), 5))
         to_del = []
         ret = []
         for t, trk in enumerate(trks):
@@ -61,7 +62,11 @@ class VOCSort(object):
             trk[:] = [pos[0], pos[1], pos[2], pos[3], 0]
             if np.any(np.isnan(pos)):
                 to_del.append(t)
+                grown_trks[t] = trk
+            else:
+                grown_trks[t] = self.trackers[t].grow_bbox(trk)
         trks = np.ma.compress_rows(np.ma.masked_invalid(trks))
+        grown_trks = np.ma.compress_rows(np.ma.masked_invalid(grown_trks))
         for t in reversed(to_del):
             self.trackers.pop(t)
 
@@ -73,7 +78,7 @@ class VOCSort(object):
         #matched, unmatched_dets, unmatched_trks = associate_old_pref(
         #    dets, trks, self.iou_threshold, velocities, k_observations, self.inertia, tracker_ages)
         matched, unmatched_dets, unmatched_trks = associate_growth_boxes(
-            dets, trks, self.iou_threshold, tracker_ages)
+            dets, grown_trks, self.iou_threshold, tracker_ages)
         for m in matched:
             self.trackers[m[1]].update(dets[m[0], :])
 

@@ -240,6 +240,8 @@ def associate_detections_to_trackers(detections,trackers,iou_threshold = 0.3):
 
     return matches, np.array(unmatched_detections), np.array(unmatched_trackers)
 
+# this associate function is meant to prioritize IoU over the inertia association
+# this is implemented mainly to work with the growth box method
 def associate_growth_boxes(detections, trackers, iou_threshold, tracker_ages):
     if len(trackers) == 0:
         return np.empty((0, 2), dtype=int), np.arange(len(detections)), np.empty((0, 5), dtype=int)
@@ -289,7 +291,7 @@ def associate_growth_boxes(detections, trackers, iou_threshold, tracker_ages):
     return matches, np.array(unmatched_detections), np.array(unmatched_trackers)
 
 # growth box with inertia association
-def associate_old_pref(detections, trackers, iou_threshold, velocities, previous_obs, vdc_weight, tracker_ages):    
+def associate_inertia_boxes(detections, trackers, iou_threshold, velocities, previous_obs, vdc_weight, tracker_ages):    
     if len(trackers) == 0:
         return np.empty((0, 2), dtype=int), np.arange(len(detections)), np.empty((0, 5), dtype=int)
 

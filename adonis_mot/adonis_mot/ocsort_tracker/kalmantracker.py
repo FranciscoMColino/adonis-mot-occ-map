@@ -146,8 +146,6 @@ class KalmanBoxTracker(object):
         velocity = speed_direction(previous_box, bbox)
         return velocity
     
-
-    
     def update(self, bbox, centroid=None):
         """
         Updates the state vector with observed bbox.
@@ -188,10 +186,14 @@ class KalmanBoxTracker(object):
         else:
             self.kf.update(bbox)
 
-    def grow_bbox(self, bbox):
+    # TODO make time_since_update and velocity parameters
+    def grow_bbox(self, bbox=None):
 
-        #bbox_x_range = (bbox[2] - bbox[0]) * self.lost_growth_rate * (self.time_since_update - self.start_growth_t + self.start_growth_boost)
-        #bbox_y_range = (bbox[3] - bbox[1]) * self.lost_growth_rate * (self.time_since_update - self.start_growth_t + self.start_growth_boost)
+        bbox = bbox.copy()
+
+        if self.time_since_update <= self.start_growth_t or bbox is None:
+            print("No bbox or not enough time since update")
+            return bbox
         
         x_center = (bbox[2] + bbox[0]) / 2
         y_center = (bbox[3] + bbox[1]) / 2
@@ -206,8 +208,7 @@ class KalmanBoxTracker(object):
         bbox_mean_size = (bbox_w + bbox_h) / 2
         
         bbox_mean_increase = bbox_mean_size * self.lost_growth_rate * (self.time_since_update - self.start_growth_t + self.start_growth_boost)
-        #bbox_w_increase = bbox_mean_size * self.lost_growth_rate * (self.time_since_update - self.start_growth_t + self.start_growth_boost)
-        #bbox_h_increase = bbox_mean_size * self.lost_growth_rate * (self.time_since_update - self.start_growth_t + self.start_growth_boost)
+
         bbox_w_increase = bbox_mean_increase
         bbox_h_increase = bbox_mean_increase
 
@@ -230,8 +231,6 @@ class KalmanBoxTracker(object):
 
         if self.velocity is not None:
             pred_direction = self.velocity
-
-            #translate_vec = pred_direction * np.sqrt((bbox_w_increase/4)**2 + (bbox_h_increase/4)**2)
             
             bbox[0] += pred_direction[1] * bbox_mean_increase/2
             bbox[1] += pred_direction[0] * bbox_mean_increase/2
@@ -254,19 +253,13 @@ class KalmanBoxTracker(object):
         self.time_since_update += 1
         self.history.append(convert_x_to_bbox(self.kf.x))
 
-        bbox = self.history[-1][0]
-        if self.time_since_update > self.start_growth_t and bbox is not None:
-            self.grow_bbox(bbox)
+        return self.history[-1]
 
-        return [bbox]
-    
     def get_growth_bbox(self):
         if len(self.history) == 0:
             return None
         bbox = self.history[-1][0]
-        if self.time_since_update > self.start_growth_t and bbox is not None:
-            self.grow_bbox(bbox)
-        return bbox
+        return self.grow_bbox(bbox)
         
     def get_state(self):
         """
