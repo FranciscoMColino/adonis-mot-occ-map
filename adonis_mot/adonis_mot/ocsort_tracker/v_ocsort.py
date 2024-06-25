@@ -22,20 +22,26 @@ ASSO_FUNCS = {  "iou": iou_batch,
 
 
 class VOCSort(object):
-    def __init__(self, max_age=30, min_hits=3, iou_threshold=0.3, ignore_t=1, delta_t=3, asso_func="iou", inertia=0.2):
+    def __init__(self, max_age=30, min_hits=3, inertia_iou_threshold=0.2, growth_iou_threshold=0.1, default_iou_threshold=0.3,
+                 ignore_t=1, delta_t=3, asso_func="iou", inertia=0.2):
         """
         Sets key parameters for SORT
         """
         self.max_age = max_age
         self.min_hits = min_hits
-        self.iou_threshold = iou_threshold
+        self.inertia_iou_threshold = inertia_iou_threshold
+        self.growth_iou_threshold = growth_iou_threshold
+        self.default_iou_threshold = default_iou_threshold
         self.trackers = []
         self.frame_count = 0
-        self.ignore_t = ignore_t
-        self.delta_t = delta_t
+        self.ignore_t = ignore_t # number of frames to ignore the tracker
+        self.delta_t = delta_t # number of frames to look back for the tracker
         self.asso_func = ASSO_FUNCS[asso_func]
         self.inertia = inertia
         KalmanBoxTracker.count = 0
+
+    def get_trackers(self):
+        return self.trackers
 
     # use the inertia association as first association and then growth as second association
     def update_v2(self, dets, centroids=None):
@@ -81,7 +87,7 @@ class VOCSort(object):
         k_observations = np.array([k_previous_obs(trk.observations, trk.age, self.delta_t) for trk in self.trackers])
 
         matched_first_as, unmatched_dets_first_as, unmatched_trks_first_as = associate_inertia_boxes(
-            dets, trks, self.iou_threshold, velocities, k_observations, self.inertia, tracker_ages)
+            dets, trks, self.inertia_iou_threshold, velocities, k_observations, self.inertia, tracker_ages)
         for m in matched_first_as:
             self.trackers[m[1]].update(dets[m[0], :])
         
@@ -97,13 +103,12 @@ class VOCSort(object):
             SECOND round of association, based on grown boxes and tracker ages
         """
         
-        growth_iou_threshold = self.iou_threshold * 0.2 # TODO this should be a parameter and not hardcoded
         dets_sec_as = np.array([dets[i] for i in unmatched_dets_first_as])
         trks_sec_as = np.array([grown_trks[i] for i in unmatched_trks_first_as])
         tracker_ages_sec_as = np.array([self.trackers[i].age for i in unmatched_trks_first_as])
 
         matched_sec_as, unmatched_dets_sec_as, unmatched_trks_sec_as = associate_growth_boxes(
-            dets_sec_as, trks_sec_as, growth_iou_threshold, tracker_ages_sec_as)
+            dets_sec_as, trks_sec_as, self.growth_iou_threshold, tracker_ages_sec_as)
         for m in matched_sec_as:
             tracker_ind = unmatched_trks_first_as[m[1]]
             self.trackers[tracker_ind].update(dets_sec_as[m[0], :])
@@ -127,13 +132,13 @@ class VOCSort(object):
             left_trks = last_boxes[unmatched_trks]
             iou_left = self.asso_func(left_dets, left_trks)
             iou_left = np.array(iou_left)
-            if iou_left.max() > self.iou_threshold:
+            if iou_left.max() > self.default_iou_threshold:
                 rematched_indices = linear_assignment(-iou_left)
                 to_remove_det_indices = []
                 to_remove_trk_indices = []
                 for m in rematched_indices:
                     det_ind, trk_ind = unmatched_dets[m[0]], unmatched_trks[m[1]]
-                    if iou_left[m[0], m[1]] < self.iou_threshold:
+                    if iou_left[m[0], m[1]] < self.default_iou_threshold:
                         continue
                     self.trackers[trk_ind].update(dets[det_ind, :], centroids[det_ind])
                     to_remove_det_indices.append(det_ind)
@@ -202,9 +207,8 @@ class VOCSort(object):
         last_boxes = np.array([trk.last_observation for trk in self.trackers])
         tracker_ages = np.array([trk.age for trk in self.trackers])
 
-        growth_iou_threshold = self.iou_threshold * 0.2 # TODO this should be a parameter and not hardcoded
         matched_first_as, unmatched_dets_first_as, unmatched_trks_first_as = associate_growth_boxes(
-            dets, grown_trks, growth_iou_threshold, tracker_ages)
+            dets, grown_trks, self.growth_iou_threshold, tracker_ages)
         for m in matched_first_as:
             self.trackers[m[1]].update(dets[m[0], :])
 
@@ -229,7 +233,7 @@ class VOCSort(object):
         tracker_ages_sec_as = np.array([self.trackers[i].age for i in unmatched_trks_first_as])
 
         matched_sec_as, unmatched_dets_sec_as, unmatched_trks_sec_as = associate_inertia_boxes(
-            dets_sec_as, trks_sec_as, self.iou_threshold, velocities_sec_as, k_observations_sec_as, self.inertia, tracker_ages_sec_as)
+            dets_sec_as, trks_sec_as, self.inertia_iou_threshold, velocities_sec_as, k_observations_sec_as, self.inertia, tracker_ages_sec_as)
         for m in matched_sec_as:
             tracker_ind = unmatched_trks_first_as[m[1]]
             self.trackers[tracker_ind].update(dets_sec_as[m[0], :])
@@ -253,13 +257,13 @@ class VOCSort(object):
             left_trks = last_boxes[unmatched_trks]
             iou_left = self.asso_func(left_dets, left_trks)
             iou_left = np.array(iou_left)
-            if iou_left.max() > self.iou_threshold:
+            if iou_left.max() > self.default_iou_threshold:
                 rematched_indices = linear_assignment(-iou_left)
                 to_remove_det_indices = []
                 to_remove_trk_indices = []
                 for m in rematched_indices:
                     det_ind, trk_ind = unmatched_dets[m[0]], unmatched_trks[m[1]]
-                    if iou_left[m[0], m[1]] < self.iou_threshold:
+                    if iou_left[m[0], m[1]] < self.default_iou_threshold:
                         continue
                     self.trackers[trk_ind].update(dets[det_ind, :], centroids[det_ind])
                     to_remove_det_indices.append(det_ind)
@@ -287,8 +291,5 @@ class VOCSort(object):
         if len(ret) > 0:
             return np.concatenate(ret)
         return np.empty((0, 5))
-    
-    def get_trackers(self):
-        return self.trackers
 
 
