@@ -23,7 +23,7 @@ ASSO_FUNCS = {  "iou": iou_batch,
 
 class VOCSort(object):
     def __init__(self, max_age=30, min_hits=3, inertia_iou_threshold=0.2, growth_iou_threshold=0.1, default_iou_threshold=0.3,
-                 ignore_t=1, delta_t=3, asso_func="iou", inertia=0.2, intertia_age_weight=0.5, growth_age_weight=0.5):
+                 ignore_t=1, delta_t=3, asso_func="iou", inertia=0.2, intertia_age_weight=0.5, growth_rate=0.1, growth_age_weight=0.5):
         """
         Sets key parameters for SORT
         """
@@ -39,6 +39,7 @@ class VOCSort(object):
         self.asso_func = ASSO_FUNCS[asso_func]
         self.inertia = inertia
         self.inertia_age_weight = intertia_age_weight
+        self.growth_rate = growth_rate
         self.growth_age_weight = growth_age_weight
         KalmanBoxTracker.count = 0
 
@@ -152,7 +153,7 @@ class VOCSort(object):
             self.trackers[m].update(None)
 
         for i in unmatched_dets:
-            trk = KalmanBoxTracker(dets[i, :], ignore_t=self.ignore_t, delta_t=self.delta_t)
+            trk = KalmanBoxTracker(dets[i, :], ignore_t=self.ignore_t, delta_t=self.delta_t, growth_rate=self.growth_rate)
             self.trackers.append(trk)
         i = len(self.trackers)
         for trk in reversed(self.trackers):
@@ -278,7 +279,7 @@ class VOCSort(object):
             self.trackers[m].update(None)
 
         for i in unmatched_dets:
-            trk = KalmanBoxTracker(dets[i, :], ignore_t=self.ignore_t, delta_t=self.delta_t)
+            trk = KalmanBoxTracker(dets[i, :], ignore_t=self.ignore_t, delta_t=self.delta_t, growth_rate=self.growth_rate)
             self.trackers.append(trk)
         i = len(self.trackers)
         for trk in reversed(self.trackers):

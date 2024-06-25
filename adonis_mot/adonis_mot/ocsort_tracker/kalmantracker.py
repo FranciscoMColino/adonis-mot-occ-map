@@ -7,7 +7,7 @@ class KalmanBoxTracker(object):
     """
     count = 0
 
-    def __init__(self, bbox, ignore_t=1, delta_t=3, orig=False, lost_growth_rate=99999):
+    def __init__(self, bbox, ignore_t=1, delta_t=3, orig=False, growth_rate=0.1):
         """
         Initialises a tracker using initial bounding box.
 
@@ -55,9 +55,9 @@ class KalmanBoxTracker(object):
         self.ignore_t = ignore_t
         self.delta_t = delta_t
 
-        self.lost_growth_rate = 0.1
-        self.start_growth_t = 0
-        self.start_growth_boost = 1
+        self.growth_rate = growth_rate
+        self.start_growth_t = 0     # TODO make this a parameter
+        self.start_growth_boost = 1 # TODO make this a parameter
 
         self.mean_w = None
         self.mean_h = None
@@ -207,7 +207,7 @@ class KalmanBoxTracker(object):
 
         bbox_mean_size = (bbox_w + bbox_h) / 2
         
-        bbox_mean_increase = bbox_mean_size * self.lost_growth_rate * (self.time_since_update - self.start_growth_t + self.start_growth_boost)
+        bbox_mean_increase = bbox_mean_size * self.growth_rate * (self.time_since_update - self.start_growth_t + self.start_growth_boost)
 
         bbox_w_increase = bbox_mean_increase
         bbox_h_increase = bbox_mean_increase

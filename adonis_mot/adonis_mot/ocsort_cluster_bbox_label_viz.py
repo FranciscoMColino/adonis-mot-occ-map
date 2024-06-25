@@ -64,6 +64,7 @@ class ClusterBoundingBoxViz(Node):
             max_age=60,
             inertia=0.5,        # 0.8
             intertia_age_weight=0.3,
+            growth_rate=0.1,
             growth_age_weight=0.9,
         )
 
