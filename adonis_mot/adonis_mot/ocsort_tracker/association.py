@@ -292,7 +292,7 @@ def associate_growth_boxes(detections, trackers, iou_threshold, tracker_ages):
 
 # growth box with inertia association
 def associate_inertia_boxes(detections, trackers, iou_threshold, velocities, previous_obs, vdc_weight, tracker_ages):    
-    if len(trackers) == 0:
+    if len(trackers) == 0 or len(detections) == 0:
         return np.empty((0, 2), dtype=int), np.arange(len(detections)), np.empty((0, 5), dtype=int)
 
     Y, X = speed_direction_batch(detections, previous_obs)
@@ -316,7 +316,7 @@ def associate_inertia_boxes(detections, trackers, iou_threshold, velocities, pre
     angle_diff_cost = angle_diff_cost * scores
 
     # Create an age cost matrix where older trackers have lower cost
-    age_weight = -0.6
+    age_weight = -0.3
     max_age = np.max(tracker_ages) + 1
     age_cost = (max_age - tracker_ages) / max_age
     age_cost = np.repeat(age_cost[:, np.newaxis], detections.shape[0], axis=1).T

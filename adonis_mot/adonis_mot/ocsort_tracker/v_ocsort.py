@@ -70,9 +70,9 @@ class VOCSort(object):
         for t in reversed(to_del):
             self.trackers.pop(t)
 
-        velocities = np.array([trk.velocity if trk.velocity is not None else np.array((0, 0)) for trk in self.trackers])
+        #velocities = np.array([trk.velocity if trk.velocity is not None else np.array((0, 0)) for trk in self.trackers])
         last_boxes = np.array([trk.last_observation for trk in self.trackers])
-        k_observations = np.array([k_previous_obs(trk.observations, trk.age, self.delta_t) for trk in self.trackers])
+        #k_observations = np.array([k_previous_obs(trk.observations, trk.age, self.delta_t) for trk in self.trackers])
         tracker_ages = np.array([trk.age for trk in self.trackers])
 
         #matched, unmatched_dets, unmatched_trks = associate_old_pref(
@@ -81,6 +81,27 @@ class VOCSort(object):
             dets, grown_trks, self.iou_threshold, tracker_ages)
         for m in matched:
             self.trackers[m[1]].update(dets[m[0], :])
+
+        unmatched_dets_first_to_second_map = dict()
+        for i in range(len(unmatched_dets)):
+            unmatched_dets_first_to_second_map[i] = unmatched_dets[i]
+        
+        unmatched_trks_first_to_second_map = dict()
+        for i in range(len(unmatched_trks)):
+            unmatched_trks_first_to_second_map[i] = unmatched_trks[i]
+
+        # use the unmathced_trks to get the remaining trackers
+        # sec_as = second association
+        dets_sec_as = np.array([dets[i] for i in unmatched_dets])
+        trks_sec_as = np.array([trks[i] for i in unmatched_trks])
+        k_observations_sec_as = np.array([k_previous_obs(self.trackers[i].observations, self.trackers[i].age, self.delta_t) for i in unmatched_trks])
+        velocities_sec_as = np.array([self.trackers[i].velocity if self.trackers[i].velocity is not None else np.array((0, 0)) for i in unmatched_trks])
+        tracker_ages_sec_as = np.array([self.trackers[i].age for i in unmatched_trks])
+
+        matched_sec_as, unmatched_dets_sec_as, unmatched_trks_sec_as = associate_inertia_boxes(
+            dets_sec_as, trks_sec_as, self.iou_threshold, velocities_sec_as, k_observations_sec_as, self.inertia, tracker_ages_sec_as)
+        #for m in matched_second_asso:
+        #    self.trackers[m[1]].update(dets_second_asso[m[0], :])
 
         if unmatched_dets.shape[0] > 0 and unmatched_trks.shape[0] > 0:
             left_dets = dets[unmatched_dets]
