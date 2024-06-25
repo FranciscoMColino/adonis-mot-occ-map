@@ -63,6 +63,8 @@ class ClusterBoundingBoxViz(Node):
             min_hits=5,
             max_age=60,
             inertia=0.5,        # 0.8
+            intertia_age_weight=0.3,
+            growth_age_weight=0.9,
         )
 
     def setup_visualizer(self):

@@ -23,7 +23,7 @@ ASSO_FUNCS = {  "iou": iou_batch,
 
 class VOCSort(object):
     def __init__(self, max_age=30, min_hits=3, inertia_iou_threshold=0.2, growth_iou_threshold=0.1, default_iou_threshold=0.3,
-                 ignore_t=1, delta_t=3, asso_func="iou", inertia=0.2):
+                 ignore_t=1, delta_t=3, asso_func="iou", inertia=0.2, intertia_age_weight=0.5, growth_age_weight=0.5):
         """
         Sets key parameters for SORT
         """
@@ -38,6 +38,8 @@ class VOCSort(object):
         self.delta_t = delta_t # number of frames to look back for the tracker
         self.asso_func = ASSO_FUNCS[asso_func]
         self.inertia = inertia
+        self.inertia_age_weight = intertia_age_weight
+        self.growth_age_weight = growth_age_weight
         KalmanBoxTracker.count = 0
 
     def get_trackers(self):
@@ -87,7 +89,7 @@ class VOCSort(object):
         k_observations = np.array([k_previous_obs(trk.observations, trk.age, self.delta_t) for trk in self.trackers])
 
         matched_first_as, unmatched_dets_first_as, unmatched_trks_first_as = associate_inertia_boxes(
-            dets, trks, self.inertia_iou_threshold, velocities, k_observations, self.inertia, tracker_ages)
+            dets, trks, self.inertia_iou_threshold, velocities, k_observations, self.inertia, tracker_ages, self.inertia_age_weight)
         for m in matched_first_as:
             self.trackers[m[1]].update(dets[m[0], :])
         
@@ -108,7 +110,7 @@ class VOCSort(object):
         tracker_ages_sec_as = np.array([self.trackers[i].age for i in unmatched_trks_first_as])
 
         matched_sec_as, unmatched_dets_sec_as, unmatched_trks_sec_as = associate_growth_boxes(
-            dets_sec_as, trks_sec_as, self.growth_iou_threshold, tracker_ages_sec_as)
+            dets_sec_as, trks_sec_as, self.growth_iou_threshold, tracker_ages_sec_as, self.growth_age_weight)
         for m in matched_sec_as:
             tracker_ind = unmatched_trks_first_as[m[1]]
             self.trackers[tracker_ind].update(dets_sec_as[m[0], :])
@@ -208,7 +210,7 @@ class VOCSort(object):
         tracker_ages = np.array([trk.age for trk in self.trackers])
 
         matched_first_as, unmatched_dets_first_as, unmatched_trks_first_as = associate_growth_boxes(
-            dets, grown_trks, self.growth_iou_threshold, tracker_ages)
+            dets, grown_trks, self.growth_iou_threshold, tracker_ages, self.growth_age_weight)
         for m in matched_first_as:
             self.trackers[m[1]].update(dets[m[0], :])
 
@@ -233,7 +235,8 @@ class VOCSort(object):
         tracker_ages_sec_as = np.array([self.trackers[i].age for i in unmatched_trks_first_as])
 
         matched_sec_as, unmatched_dets_sec_as, unmatched_trks_sec_as = associate_inertia_boxes(
-            dets_sec_as, trks_sec_as, self.inertia_iou_threshold, velocities_sec_as, k_observations_sec_as, self.inertia, tracker_ages_sec_as)
+            dets_sec_as, trks_sec_as, self.inertia_iou_threshold, velocities_sec_as, k_observations_sec_as, 
+            self.inertia, tracker_ages_sec_as, self.inertia_age_weight)
         for m in matched_sec_as:
             tracker_ind = unmatched_trks_first_as[m[1]]
             self.trackers[tracker_ind].update(dets_sec_as[m[0], :])
