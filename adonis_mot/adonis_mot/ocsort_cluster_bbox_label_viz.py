@@ -221,6 +221,7 @@ class ClusterBoundingBoxViz(Node):
 
         bboxes_array = np.array([get_2d_bbox_from_3d_bbox(np.array([[p.x, p.y, p.z] for p in ember_cluster.bounding_box.points])) for ember_cluster in ember_cluster_array])
         bboxes_to_track = np.array([get_track_struct_from_2d_bbox(bbox) for bbox in bboxes_array])
+        centroids_array = np.array([[cluster.centroid.x, cluster.centroid.y, cluster.centroid.z] for cluster in ember_cluster_array])
 
         tracking_res = self.ocsort.update(bboxes_to_track)
         tracking_ids = tracking_res[:, 4]
@@ -233,6 +234,7 @@ class ClusterBoundingBoxViz(Node):
             ember_cluster = ember_cluster_array[i]
             ember_bbox = ember_cluster.bounding_box
             ember_pc2 = ember_cluster.point_cloud
+            ember_centroid = ember_cluster.centroid
 
             # Track ID is the last element in the tracking result, find using the bbox
             track_id = 0
@@ -270,6 +272,13 @@ class ClusterBoundingBoxViz(Node):
             cluster_point_cloud.points = o3d.utility.Vector3dVector(cluster_points)
             cluster_point_cloud.paint_uniform_color(color)
             self.vis.add_geometry(cluster_point_cloud, reset_bounding_box=False)
+
+            # Draw the centroid
+            centroid = np.array([ember_centroid.x, ember_centroid.y, ember_centroid.z])
+            sphere = o3d.geometry.TriangleMesh.create_sphere(radius=0.05)
+            sphere.translate(centroid)
+            sphere.paint_uniform_color([0.7, 0, 1])
+            self.vis.add_geometry(sphere, reset_bounding_box=False)
             
         self.vis.poll_events()
         self.vis.update_renderer()
