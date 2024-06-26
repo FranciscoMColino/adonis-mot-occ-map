@@ -5,6 +5,7 @@ from ember_detection_interfaces.msg import EmberClusterArray
 import numpy as np
 import open3d as o3d
 import cv2
+import math
 
 from .ocsort_tracker.ocsort import OCSort
 from .ocsort_tracker.giocsort import GIOCSort
@@ -144,7 +145,7 @@ class ClusterBoundingBoxViz(Node):
         bbox.color = [0, 0, 1]
         self.vis.add_geometry(bbox, reset_bounding_box=False)
 
-    def draw_occ_grid(self):
+    def capture_occ_grid_image(self):
         # Draw the occupancy grid in opencv2 new window
         
         max_size = 640
@@ -212,12 +213,10 @@ class ClusterBoundingBoxViz(Node):
             x2 = min(x2, self.occupancy_grid.x_o + self.occupancy_grid.width)
             y2 = min(y2, self.occupancy_grid.y_o + self.occupancy_grid.height)
 
-            # convert to grid coordinates, prefer the lower bound
-            x1 = int((x1 - self.occupancy_grid.x_o) / self.occupancy_grid.resolution)
-            y1 = int((y1 - self.occupancy_grid.y_o) / self.occupancy_grid.resolution)
-            x2 = int((x2 - self.occupancy_grid.x_o) / self.occupancy_grid.resolution)
-            y2 = int((y2 - self.occupancy_grid.y_o) / self.occupancy_grid.resolution)
-            
+            x1 = math.floor((x1 - self.occupancy_grid.x_o) / self.occupancy_grid.resolution)
+            y1 = math.floor((y1 - self.occupancy_grid.y_o) / self.occupancy_grid.resolution)
+            x2 = math.ceil((x2 - self.occupancy_grid.x_o) / self.occupancy_grid.resolution)
+            y2 = math.ceil((y2 - self.occupancy_grid.y_o) / self.occupancy_grid.resolution)
 
             self.occupancy_grid.grid[y1:y2, x1:x2] = 1
 
@@ -448,7 +447,6 @@ class ClusterBoundingBoxViz(Node):
         #self.draw_trk_velocity_direction(self.ocsort.get_trackers(), tracking_ids)
         self.draw_future_predictions(self.ocsort.get_trackers(), None)
         self.draw_occ_grid_bounds()
-        self.draw_occ_grid()
 
         self.vis.poll_events()
         self.vis.update_renderer()
@@ -466,7 +464,7 @@ class ClusterBoundingBoxViz(Node):
 
         image_trk = self.capture_image()# Capture the current render
         image_trk = self.add_text_overlay(image_trk, tracking_res, object_types=objec_tracking_res_types)
-        image_occ_grid = self.draw_occ_grid()
+        image_occ_grid = self.capture_occ_grid_image()
         # Display the image with text overlay
         cv2.imshow(self.cv2_track_window_name, image_trk)
         cv2.imshow(self.cv2_occ_grid_window_name, image_occ_grid)
