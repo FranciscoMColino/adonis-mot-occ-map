@@ -98,6 +98,29 @@ class ClusterBoundingBoxViz(Node):
         self.vis.get_render_option().point_size = 2.0
         self.vis.get_render_option().line_width = 10.0
 
+    def draw_bbox_from_tracker(self, bbox, color):
+        x1, y1, x2, y2 = bbox
+        z1, z2 = 0, 3
+
+        points = np.array([
+            [x1, y1, z1],
+            [x1, y1, z2],
+            [x1, y2, z1],
+            [x1, y2, z2],
+            [x2, y1, z1],
+            [x2, y1, z2],
+            [x2, y2, z1],
+            [x2, y2, z2],
+        ])
+        point_cloud = o3d.geometry.PointCloud()
+        point_cloud.points = o3d.utility.Vector3dVector(points)
+        point_cloud.paint_uniform_color(color)
+        self.vis.add_geometry(point_cloud, reset_bounding_box=False)
+
+        bbox_o3d = point_cloud.get_axis_aligned_bounding_box()
+        bbox_o3d.color = color
+        self.vis.add_geometry(bbox_o3d, reset_bounding_box=False)
+
     def draw_kf_predict(self, trackers):
 
         MAX_TIME_SINCE_UPDATE = 60
@@ -118,30 +141,7 @@ class ClusterBoundingBoxViz(Node):
             if bbox is None:
                 continue
 
-            x1, y1, x2, y2 = bbox
-            z1, z2 = 0, 4   # TODO - Get the z values from the point cloud?
-
-            color = self.id_to_color[track_id]
-
-            # Draw the bounding box
-            points = np.array([
-                [x1, y1, z1],
-                [x1, y1, z2],
-                [x1, y2, z1],
-                [x1, y2, z2],
-                [x2, y1, z1],
-                [x2, y1, z2],
-                [x2, y2, z1],
-                [x2, y2, z2],
-            ])
-            point_cloud = o3d.geometry.PointCloud()
-            point_cloud.points = o3d.utility.Vector3dVector(points)
-            point_cloud.paint_uniform_color(color)
-            self.vis.add_geometry(point_cloud, reset_bounding_box=False)
-
-            bbox_o3d = point_cloud.get_axis_aligned_bounding_box()
-            bbox_o3d.color = color
-            self.vis.add_geometry(bbox_o3d, reset_bounding_box=False)
+            self.draw_bbox_from_tracker(bbox, self.id_to_color[track_id])
 
     def draw_mean_bbox(self, trackers, track_ids):
         for trk in trackers:
@@ -158,28 +158,7 @@ class ClusterBoundingBoxViz(Node):
             if bbox is None:
                 continue
 
-            x1, y1, x2, y2 = bbox
-            z1, z2 = 0, 3
-
-            color = self.id_to_color[track_id]
-            points = np.array([
-                [x1, y1, z1],
-                [x1, y1, z2],
-                [x1, y2, z1],
-                [x1, y2, z2],
-                [x2, y1, z1],
-                [x2, y1, z2],
-                [x2, y2, z1],
-                [x2, y2, z2],
-            ])
-            point_cloud = o3d.geometry.PointCloud()
-            point_cloud.points = o3d.utility.Vector3dVector(points)
-            point_cloud.paint_uniform_color(color)
-            self.vis.add_geometry(point_cloud, reset_bounding_box=False)
-
-            bbox_o3d = point_cloud.get_axis_aligned_bounding_box()
-            bbox_o3d.color = color
-            self.vis.add_geometry(bbox_o3d, reset_bounding_box=False)
+            self.draw_bbox_from_tracker(bbox, self.id_to_color[track_id])
 
     def draw_trk_velocity_direction(self, trackers, track_ids):
         for trk in trackers:
@@ -187,11 +166,6 @@ class ClusterBoundingBoxViz(Node):
 
             if track_ids is not None and track_id not in track_ids:
                 continue
-
-            if track_id not in self.id_to_color:
-                self.id_to_color[track_id] = np.random.rand(3)
-
-            color = self.id_to_color[track_id]
 
             velocity = trk.velocity
 
@@ -213,7 +187,6 @@ class ClusterBoundingBoxViz(Node):
                 [x_end, y_end, z_end]
             ])
 
-            
             line_set = o3d.geometry.LineSet()
             line_set.points = o3d.utility.Vector3dVector(points)
             line_set.lines = o3d.utility.Vector2iVector([[0, 1]])
@@ -264,27 +237,7 @@ class ClusterBoundingBoxViz(Node):
                 if bbox is None:
                     continue
 
-                x1, y1, x2, y2 = bbox
-                z1, z2 = 0, 3
-
-                points = np.array([
-                    [x1, y1, z1],
-                    [x1, y1, z2],
-                    [x1, y2, z1],
-                    [x1, y2, z2],
-                    [x2, y1, z1],
-                    [x2, y1, z2],
-                    [x2, y2, z1],
-                    [x2, y2, z2],
-                ])
-                point_cloud = o3d.geometry.PointCloud()
-                point_cloud.points = o3d.utility.Vector3dVector(points)
-                point_cloud.paint_uniform_color(color)
-                self.vis.add_geometry(point_cloud, reset_bounding_box=False)
-
-                bbox_o3d = point_cloud.get_axis_aligned_bounding_box()
-                bbox_o3d.color = color
-                self.vis.add_geometry(bbox_o3d, reset_bounding_box=False)
+                self.draw_bbox_from_tracker(bbox, color)
 
     def callback(self, msg):
         self.vis.clear_geometries()
@@ -298,6 +251,10 @@ class ClusterBoundingBoxViz(Node):
 
         tracking_res = self.ocsort.update_v1(bboxes_to_track, centroids2d_array)
         tracking_ids = tracking_res[:, 4]
+
+        """
+            Draw the bounding boxes, point clouds and centroids
+        """
 
         for i in range(len(ember_cluster_array)):
             ember_cluster = ember_cluster_array[i]
@@ -404,18 +361,10 @@ class ClusterBoundingBoxViz(Node):
         """
         Project a 3D point to 2D screen coordinates using the intrinsic and extrinsic camera parameters.
         """
-        # Convert point to homogeneous coordinates
-        point_3d_homo = np.append(point_3d, 1)
-        
-        # Apply extrinsic matrix (transform point to camera coordinates)
-        point_cam = extrinsic @ point_3d_homo
-        
-        # Apply intrinsic matrix (project point to 2D)
-        point_2d_homo = intrinsic @ point_cam[:3]
-        
-        # Normalize the coordinates
-        point_2d = point_2d_homo[:2] / point_2d_homo[2]
-        
+        point_3d_homo = np.append(point_3d, 1) # Convert point to homogeneous coordinates
+        point_cam = extrinsic @ point_3d_homo # Apply extrinsic matrix (transform point to camera coordinates)
+        point_2d_homo = intrinsic @ point_cam[:3] # Apply intrinsic matrix (project point to 2D)
+        point_2d = point_2d_homo[:2] / point_2d_homo[2] # Normalize the coordinates
         return point_2d
 
 
