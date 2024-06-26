@@ -146,15 +146,43 @@ class ClusterBoundingBoxViz(Node):
 
     def draw_occ_grid(self):
         # Draw the occupancy grid in opencv2 new window
-        pass
+        
+        max_size = 640
+
+        if self.occupancy_grid.width > self.occupancy_grid.height:
+            occ_grid_width = max_size
+            occ_grid_height = int(max_size * (self.occupancy_grid.height / self.occupancy_grid.width))
+        else:
+            occ_grid_height = max_size
+            occ_grid_width = int(max_size * (self.occupancy_grid.width / self.occupancy_grid.height))
+
+        occ_grid = self.occupancy_grid.grid
+        occ_grid = (1-occ_grid) * 255
+        occ_grid = occ_grid.astype(np.uint8)
+
+        occ_grid = cv2.resize(occ_grid, (occ_grid_width, occ_grid_height), interpolation=cv2.INTER_NEAREST)
+        
+        # mirror on the x-axis
+        occ_grid = cv2.flip(occ_grid, 0)
+
+        occ_grid = cv2.cvtColor(occ_grid, cv2.COLOR_GRAY2BGR)
+
+        # draw the grid lines
+        #for i in range(0, occ_grid_width, int(occ_grid_width / (self.occupancy_grid.width / self.occupancy_grid.resolution))):
+        #    cv2.line(occ_grid, (i, 0), (i, occ_grid_height), (255, 255, 255), 1)
+        #for i in range(0, occ_grid_height, int(occ_grid_height / (self.occupancy_grid.height / self.occupancy_grid.resolution))):
+        #    cv2.line(occ_grid, (0, i), (occ_grid_width, i), (255, 255, 255), 1)
+
+        return occ_grid
+
             
     def clear_occ_grid(self):
         self.occupancy_grid.grid = np.zeros((int(self.occupancy_grid.height / self.occupancy_grid.resolution), int(self.occupancy_grid.width / self.occupancy_grid.resolution)))
 
-    def update_occ_grid(self, trackers):
+    def update_occ_grid(self, trackers, safe_margin=0.1):
 
         MAX_TIME_SINCE_UPDATE = 60
-        MIN_NUM_OBSERVATIONS = 5
+        MIN_NUM_OBSERVATIONS = 10
 
         for trk in trackers:
 
@@ -170,15 +198,26 @@ class ClusterBoundingBoxViz(Node):
 
             # Update the occupancy grid
             x1, y1, x2, y2 = bbox[:4]
+            x1, x2 = min(x1, x2), max(x1, x2)
+            y1, y2 = min(y1, y2), max(y1, y2)
+
+            # add a safe margin
+            x1 -= safe_margin
+            y1 -= safe_margin
+            x2 += safe_margin
+            y2 += safe_margin
+
             x1 = max(x1, self.occupancy_grid.x_o)
             y1 = max(y1, self.occupancy_grid.y_o)
             x2 = min(x2, self.occupancy_grid.x_o + self.occupancy_grid.width)
             y2 = min(y2, self.occupancy_grid.y_o + self.occupancy_grid.height)
 
+            # convert to grid coordinates, prefer the lower bound
             x1 = int((x1 - self.occupancy_grid.x_o) / self.occupancy_grid.resolution)
             y1 = int((y1 - self.occupancy_grid.y_o) / self.occupancy_grid.resolution)
             x2 = int((x2 - self.occupancy_grid.x_o) / self.occupancy_grid.resolution)
             y2 = int((y2 - self.occupancy_grid.y_o) / self.occupancy_grid.resolution)
+            
 
             self.occupancy_grid.grid[y1:y2, x1:x2] = 1
 
@@ -425,11 +464,12 @@ class ClusterBoundingBoxViz(Node):
                 objec_tracking_res_types[i] = KFTrackerObjectTypes.INVALID
 
 
-        image = self.capture_image()# Capture the current render
-        
-        image = self.add_text_overlay(image, tracking_res, object_types=objec_tracking_res_types)
+        image_trk = self.capture_image()# Capture the current render
+        image_trk = self.add_text_overlay(image_trk, tracking_res, object_types=objec_tracking_res_types)
+        image_occ_grid = self.draw_occ_grid()
         # Display the image with text overlay
-        cv2.imshow(self.cv2_track_window_name, image)
+        cv2.imshow(self.cv2_track_window_name, image_trk)
+        cv2.imshow(self.cv2_occ_grid_window_name, image_occ_grid)
         cv2.waitKey(1)
 
     def capture_image(self):
