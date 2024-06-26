@@ -204,7 +204,7 @@ class ClusterBoundingBoxViz(Node):
 
         return x1, y1, x2, y2
 
-    def update_occ_grid(self, trackers, safe_margin=0.1, k_ahead=30):
+    def update_occ_grid(self, trackers, safe_margin=0.1, k_ahead=30, radial_margin=2):
 
         MAX_TIME_SINCE_UPDATE = 60
         MIN_NUM_OBSERVATIONS = 10
@@ -229,7 +229,7 @@ class ClusterBoundingBoxViz(Node):
 
                 if future_bbox is not None and not np.any(np.isnan(future_bbox)):
                     future_x1, future_y1, future_x2, future_y2 = self.convert_bbox_to_grid_coords(future_bbox, safe_margin=safe_margin)
-                    
+
                     # Get the centers of the current and future bounding boxes
                     center_x1 = (x1 + x2) / 2
                     center_y1 = (y1 + y2) / 2
@@ -241,11 +241,37 @@ class ClusterBoundingBoxViz(Node):
                         for j in range(min(y1, future_y1), max(y2, future_y2)):
                             dist_to_current = np.sqrt((i - center_x1) ** 2 + (j - center_y1) ** 2)
                             dist_to_future = np.sqrt((i - center_x2) ** 2 + (j - center_y2) ** 2)
-                            value = dist_to_future / (dist_to_current + dist_to_future) * 1 + dist_to_current / (dist_to_current + dist_to_future) * self.future_pred_occ_weight
-                            self.occupancy_grid.grid[j, i] += value
-                            self.occupancy_grid.grid[j, i] = np.clip(self.occupancy_grid.grid[j, i], 0, 1)
+                            total_dist = dist_to_current + dist_to_future
+                            if total_dist != 0:
+                                value = (dist_to_future / total_dist) * 0.5 + (dist_to_current / total_dist) * self.future_pred_occ_weight
+                            else:
+                                value = 0.5 * (1 + self.future_pred_occ_weight)  # Equal weight if total distance is zero
 
-                        
+                            # Apply radial margin with quadratic decay
+                            for dx in range(-radial_margin, radial_margin + 1):
+                                for dy in range(-radial_margin, radial_margin + 1):
+                                    if 0 <= i + dx < self.occupancy_grid.grid.shape[1] and 0 <= j + dy < self.occupancy_grid.grid.shape[0]:
+                                        dist_from_center = np.sqrt(dx ** 2 + dy ** 2)
+                                        if dist_from_center <= radial_margin:
+                                            decay_factor = (1 - (dist_from_center / radial_margin)) ** 2  # Quadratic decay
+                                            self.occupancy_grid.grid[j + dy, i + dx] += value * decay_factor
+                                            self.occupancy_grid.grid[j + dy, i + dx] = np.clip(self.occupancy_grid.grid[j + dy, i + dx], 0, 1)
+                else:
+                    # No future bbox found, apply radial margin around current bbox
+                    for i in range(x1, x2):
+                        for j in range(y1, y2):
+                            value = 0.5 * (1 + self.future_pred_occ_weight)  # Use the current bbox value
+
+                            # Apply radial margin with quadratic decay
+                            for dx in range(-radial_margin, radial_margin + 1):
+                                for dy in range(-radial_margin, radial_margin + 1):
+                                    if 0 <= i + dx < self.occupancy_grid.grid.shape[1] and 0 <= j + dy < self.occupancy_grid.grid.shape[0]:
+                                        dist_from_center = np.sqrt(dx ** 2 + dy ** 2)
+                                        if dist_from_center <= radial_margin:
+                                            decay_factor = (1 - (dist_from_center / radial_margin)) ** 2  # Quadratic decay
+                                            self.occupancy_grid.grid[j + dy, i + dx] += value * decay_factor
+                                            self.occupancy_grid.grid[j + dy, i + dx] = np.clip(self.occupancy_grid.grid[j + dy, i + dx], 0, 1)
+
 
     def draw_bbox_from_tracker(self, bbox, color):
         x1, y1, x2, y2 = bbox
