@@ -61,6 +61,9 @@ class ClusterBoundingBoxViz(Node):
         self.vis.create_window('Open3D', width=640, height=480)
         self.setup_visualizer()
 
+        self.cv2_track_window_name = "Track ID and Type"
+        self.cv2_occ_grid_window_name = "Occupancy Grid"
+
         self.id_to_color = {
             0: (0.3, 0.3, 0.3),
         }
@@ -158,7 +161,26 @@ class ClusterBoundingBoxViz(Node):
             if trk.time_since_update > MAX_TIME_SINCE_UPDATE or len(trk.observations) < MIN_NUM_OBSERVATIONS:
                 continue
                 
-            pass
+            bbox = convert_x_to_bbox(trk.kf.x)[0]
+
+            if bbox is None:
+                continue
+
+            #self.draw_bbox_from_tracker(bbox, [0, 1, 0])
+
+            # Update the occupancy grid
+            x1, y1, x2, y2 = bbox[:4]
+            x1 = max(x1, self.occupancy_grid.x_o)
+            y1 = max(y1, self.occupancy_grid.y_o)
+            x2 = min(x2, self.occupancy_grid.x_o + self.occupancy_grid.width)
+            y2 = min(y2, self.occupancy_grid.y_o + self.occupancy_grid.height)
+
+            x1 = int((x1 - self.occupancy_grid.x_o) / self.occupancy_grid.resolution)
+            y1 = int((y1 - self.occupancy_grid.y_o) / self.occupancy_grid.resolution)
+            x2 = int((x2 - self.occupancy_grid.x_o) / self.occupancy_grid.resolution)
+            y2 = int((y2 - self.occupancy_grid.y_o) / self.occupancy_grid.resolution)
+
+            self.occupancy_grid.grid[y1:y2, x1:x2] = 1
 
     def draw_bbox_from_tracker(self, bbox, color):
         x1, y1, x2, y2 = bbox
@@ -407,7 +429,7 @@ class ClusterBoundingBoxViz(Node):
         
         image = self.add_text_overlay(image, tracking_res, object_types=objec_tracking_res_types)
         # Display the image with text overlay
-        cv2.imshow("Open3D with Text Overlay", image)
+        cv2.imshow(self.cv2_track_window_name, image)
         cv2.waitKey(1)
 
     def capture_image(self):
