@@ -85,14 +85,16 @@ class ClusterBoundingBoxViz(Node):
         )
 
         self.occupancy_grid = OccupancyGrid2DAdonis(
-            x_o = -5,
-            y_o = -20,
-            width=30,
-            height=40,
+            x_o = -50,
+            y_o = -50,
+            width=100,
+            height=100,
             resolution=0.2
         )
 
-        self.future_pred_occ_weight = 0.4
+        self.cur_occ_weight = 0.2
+        self.future_pred_occ_weight = 0.18
+        self.grid_decay_rate = 0.1
 
     def setup_visualizer(self):
         # Add 8 points to initiate the visualizer's bounding box
@@ -182,6 +184,10 @@ class ClusterBoundingBoxViz(Node):
     def clear_occ_grid(self):
         self.occupancy_grid.grid = np.zeros((int(self.occupancy_grid.height / self.occupancy_grid.resolution), int(self.occupancy_grid.width / self.occupancy_grid.resolution)))
 
+    def decay_occ_grid(self, decay_rate=0.1):
+        self.occupancy_grid.grid -= decay_rate
+        self.occupancy_grid.grid = np.clip(self.occupancy_grid.grid, 0, 1)
+
     def convert_bbox_to_grid_coords(self, bbox, safe_margin=0):
 
         x1, y1, x2, y2 = bbox[:4]
@@ -251,7 +257,7 @@ class ClusterBoundingBoxViz(Node):
     # would it be faster to compute for all points in a box whose corners are the bbox cur and future or to compute just for the points in the polygon?
     def update_occ_grid_poly(self, trackers, safe_margin_a=0.1, safe_margin_b=0.4, k_ahead=30):
 
-        MAX_TIME_SINCE_UPDATE = 60
+        MAX_TIME_SINCE_UPDATE = 30
         MIN_NUM_OBSERVATIONS = 10
 
         display_lines = False
@@ -309,11 +315,11 @@ class ClusterBoundingBoxViz(Node):
                         total_dist = dist_cur + dist_future
 
                         if total_dist != 0:
-                            value = (dist_future / total_dist) * 1 + (dist_cur / total_dist) * self.future_pred_occ_weight
+                            value = (dist_future / total_dist) * self.cur_occ_weight + (dist_cur / total_dist) * self.future_pred_occ_weight
                         else:
                             value = 0.5 * (1 + self.future_pred_occ_weight)
 
-                        value *= (dist_cur_to_future / total_dist) ** 3
+                        value *= (dist_cur_to_future / total_dist) ** 2
                         
                         self.occupancy_grid.grid[y, x] += value
                         self.occupancy_grid.grid[y, x] = np.clip(self.occupancy_grid.grid[y, x], 0, 1)
@@ -552,7 +558,8 @@ class ClusterBoundingBoxViz(Node):
         tracking_res = self.ocsort.update_v1(bboxes_to_track, centroids2d_array)
         tracking_ids = tracking_res[:, 4]
 
-        self.clear_occ_grid()
+        #self.clear_occ_grid()
+        self.decay_occ_grid(decay_rate=self.grid_decay_rate)
         self.update_occ_grid_poly(self.ocsort.get_trackers())
 
         """
