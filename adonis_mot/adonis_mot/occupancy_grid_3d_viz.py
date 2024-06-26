@@ -9,6 +9,7 @@ import cv2
 from .ocsort_tracker.ocsort import OCSort
 from .ocsort_tracker.giocsort import GIOCSort
 from .ocsort_tracker.utils import *
+from .ocsort_tracker.kalmantracker import ObjectTypes as KFTrackerObjectTypes
 
 from .ocsort_tracker.kalmanfilter import predict as kf_predict
 
@@ -310,6 +311,7 @@ class ClusterBoundingBoxViz(Node):
 
             # Track ID is the last element in the tracking result, find using the bbox
             track_id = 0
+            object_type = KFTrackerObjectTypes.STATIC
 
             for track in tracking_res:
                 if np.allclose(track[:4], bboxes_to_track[i][:4]):
@@ -361,10 +363,20 @@ class ClusterBoundingBoxViz(Node):
         self.vis.poll_events()
         self.vis.update_renderer()
 
-        # Capture the current render
-        image = self.capture_image()
-        # Add text overlay using OpenCV
-        image = self.add_text_overlay(image, tracking_res)
+        
+        objec_tracking_res_types = np.array([KFTrackerObjectTypes.STATIC] * len(tracking_res))
+        for i, track in enumerate(tracking_res):
+            track_id = int(track[4]-1)
+            kalman_tracker = self.ocsort.get_tracker_by_id(track_id)
+            if kalman_tracker is not None:
+                objec_tracking_res_types[i] = kalman_tracker.object_type
+            else:
+                objec_tracking_res_types[i] = KFTrackerObjectTypes.INVALID
+
+
+        image = self.capture_image()# Capture the current render
+        
+        image = self.add_text_overlay(image, tracking_res, object_types=objec_tracking_res_types)
         # Display the image with text overlay
         cv2.imshow("Open3D with Text Overlay", image)
         cv2.waitKey(1)
@@ -379,7 +391,7 @@ class ClusterBoundingBoxViz(Node):
         image = cv2.cvtColor(image, cv2.COLOR_RGB2BGR)
         return image
 
-    def add_text_overlay(self, image, tracking_res):
+    def add_text_overlay(self, image, tracking_res, object_types=None):
         """
         Add text overlay to the image using OpenCV.
         """
@@ -389,18 +401,30 @@ class ClusterBoundingBoxViz(Node):
         intrinsic = camera_parameters.intrinsic.intrinsic_matrix
         extrinsic = camera_parameters.extrinsic
 
-        for track in tracking_res:
+        for i, track in enumerate(tracking_res):
             bbox = track[:4]
             track_id = int(track[4])
-            text = f"ID: {track_id}"
+            text_id = f"ID: {track_id}"
+            text_type = ""
+
+            if object_types is not None:
+                if object_types[i] == KFTrackerObjectTypes.STATIC:
+                    text_type = "STATIC"
+                elif object_types[i] == KFTrackerObjectTypes.DYNAMIC:
+                    text_type = "DYNAMIC"
+                elif object_types[i] == KFTrackerObjectTypes.INVALID:
+                    text_type = "INVALID"
+                else:
+                    text_type = "UNKNOWN"
 
             # Calculate the farthest corner of the bounding box
             farthest_corner_3d = np.array([bbox[0], bbox[1], 0])  # Assuming z=0 for 2D bbox corners
             farthest_corner_2d = self.project_to_2d(farthest_corner_3d, intrinsic, extrinsic)
 
             # Overlay text on the image
-            cv2.putText(image, text, (int(farthest_corner_2d[0]), int(farthest_corner_2d[1])), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 0, 0), 2, cv2.LINE_AA)
-        
+            cv2.putText(image, text_id, (int(farthest_corner_2d[0]), int(farthest_corner_2d[1])), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 0, 0), 2, cv2.LINE_AA)
+            cv2.putText(image, text_type, (int(farthest_corner_2d[0]), int(farthest_corner_2d[1] + 20)), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 0, 0), 2, cv2.LINE_AA)
+
         return image
 
 

@@ -1,5 +1,14 @@
 import numpy as np
 from adonis_mot.ocsort_tracker.utils import *
+from adonis_mot.ocsort_tracker.association import iou_single
+from enum import Enum
+
+
+# types can be either static or dynamic
+class ObjectTypes(Enum):
+    STATIC = 1
+    DYNAMIC = 2
+    INVALID = 3
 
 class KalmanBoxTracker(object):
     """
@@ -64,6 +73,9 @@ class KalmanBoxTracker(object):
         self.mean_count = 0
 
         self.box_dims = None
+        
+        self.object_type = ObjectTypes.DYNAMIC # default object type is dynamic
+        self.object_type_threshold = 0.3
 
     def update_mean(self, bbox):
         self.mean_count += 1
@@ -146,6 +158,22 @@ class KalmanBoxTracker(object):
         velocity = speed_direction(previous_box, bbox)
         return velocity
     
+    def update_object_type(self, bbox, thresh=0.5):
+        k = self.delta_t
+        previous_box = k_previous_obs(self.observations, self.age, k)
+
+        if previous_box is None:
+            previous_box = self.last_observation
+
+        bbox = bbox[:4]
+        previous_box = previous_box[:4]
+        iou_result = iou_single(bbox, previous_box)
+
+        if iou_result >= thresh:
+            self.object_type = ObjectTypes.STATIC
+        else:
+            self.object_type = ObjectTypes.DYNAMIC
+
     def update(self, bbox, centroid=None):
         """
         Updates the state vector with observed bbox.
@@ -182,7 +210,8 @@ class KalmanBoxTracker(object):
             self.hits += 1
             self.hit_streak += 1
 
-            self.kf.update(convert_bbox_to_z(bbox))            
+            self.kf.update(convert_bbox_to_z(bbox))
+            self.update_object_type(bbox, self.object_type_threshold)
         else:
             self.kf.update(bbox)
 

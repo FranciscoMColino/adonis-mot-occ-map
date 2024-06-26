@@ -45,6 +45,12 @@ class GIOCSort(object):
 
     def get_trackers(self):
         return self.trackers
+    
+    def get_tracker_by_id(self, id):
+        for tracker in self.trackers:
+            if tracker.id == id:
+                return tracker
+        return None
 
     # use the inertia association as first association and then growth as second association
     def update_v2(self, dets, centroids=None):

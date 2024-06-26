@@ -1,6 +1,24 @@
 import os
 import numpy as np
 
+def iou_single(box1, box2):
+    """
+    Computes IOU between two bboxes in the form [x1,y1,x2,y2]
+    """
+    x1_tl, y1_tl, x1_br, y1_br = box1[0], box1[1], box1[2], box1[3]
+    x2_tl, y2_tl, x2_br, y2_br = box2[0], box2[1], box2[2], box2[3]
+    if x1_tl >= x2_br or x2_tl >= x1_br or y1_tl >= y2_br or y2_tl >= y1_br:
+        return 0
+    else:
+        x_left = max(x1_tl, x2_tl)
+        y_top = max(y1_tl, y2_tl)
+        x_right = min(x1_br, x2_br)
+        y_bottom = min(y1_br, y2_br)
+        intersection_area = (x_right - x_left) * (y_bottom - y_top)
+        box1_area = (x1_br - x1_tl) * (y1_br - y1_tl)
+        box2_area = (x2_br - x2_tl) * (y2_br - y2_tl)
+        iou = intersection_area / (box1_area + box2_area - intersection_area)
+        return iou
 
 def iou_batch(bboxes1, bboxes2):
     """
