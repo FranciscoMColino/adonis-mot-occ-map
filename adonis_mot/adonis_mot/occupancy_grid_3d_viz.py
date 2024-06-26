@@ -92,7 +92,7 @@ class ClusterBoundingBoxViz(Node):
             resolution=0.2
         )
 
-        self.future_pred_occ_weight = 0.5
+        self.future_pred_occ_weight = 0.2
 
     def setup_visualizer(self):
         # Add 8 points to initiate the visualizer's bounding box
@@ -229,21 +229,21 @@ class ClusterBoundingBoxViz(Node):
 
                 if future_bbox is not None and not np.any(np.isnan(future_bbox)):
                     future_x1, future_y1, future_x2, future_y2 = self.convert_bbox_to_grid_coords(future_bbox, safe_margin=safe_margin)
-                    #self.occupancy_grid.grid[future_y1:future_y2, future_x1:future_x2] += self.future_pred_occ_weight
-                    #self.occupancy_grid.grid[future_y1:future_y2, future_x1:future_x2] = np.clip(self.occupancy_grid.grid[future_y1:future_y2, future_x1:future_x2], 0, 1)
+                    
+                    # Get the centers of the current and future bounding boxes
+                    center_x1 = (x1 + x2) / 2
+                    center_y1 = (y1 + y2) / 2
+                    center_x2 = (future_x1 + future_x2) / 2
+                    center_y2 = (future_y1 + future_y2) / 2
 
                     # Interpolate cells between the current bbox and the future bbox
-                    num_steps = 10
-                    step_weight = self.future_pred_occ_weight / num_steps
-                    for step in range(1, num_steps + 1):
-                        alpha = step / num_steps
-                        interp_x1 = int((1 - alpha) * x1 + alpha * future_x1)
-                        interp_y1 = int((1 - alpha) * y1 + alpha * future_y1)
-                        interp_x2 = int((1 - alpha) * x2 + alpha * future_x2)
-                        interp_y2 = int((1 - alpha) * y2 + alpha * future_y2)
-
-                        self.occupancy_grid.grid[interp_y1:interp_y2, interp_x1:interp_x2] += step_weight
-                        self.occupancy_grid.grid[interp_y1:interp_y2, interp_x1:interp_x2] = np.clip(self.occupancy_grid.grid[interp_y1:interp_y2, interp_x1:interp_x2], 0, 1)
+                    for i in range(min(x1, future_x1), max(x2, future_x2)):
+                        for j in range(min(y1, future_y1), max(y2, future_y2)):
+                            dist_to_current = np.sqrt((i - center_x1) ** 2 + (j - center_y1) ** 2)
+                            dist_to_future = np.sqrt((i - center_x2) ** 2 + (j - center_y2) ** 2)
+                            value = dist_to_future / (dist_to_current + dist_to_future) * 1 + dist_to_current / (dist_to_current + dist_to_future) * self.future_pred_occ_weight
+                            self.occupancy_grid.grid[j, i] += value
+                            self.occupancy_grid.grid[j, i] = np.clip(self.occupancy_grid.grid[j, i], 0, 1)
 
                         
 
