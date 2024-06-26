@@ -248,9 +248,9 @@ class GIOCSort(object):
         matched_ids_first_as = [self.trackers[m[1]].id+1 for m in matched_first_as]
         matched_ids_sec_as = [self.trackers[unmatched_trks_first_as[m[1]]].id+1 for m in matched_sec_as]
 
-        print(f'Mathed ids, first association: {matched_ids_first_as}')
-        print(f'Mathed ids, second association: {matched_ids_sec_as}')
-        print(f'Unmatched dets: {len(unmatched_dets)}, unmatched trks: {len(unmatched_trks)}')
+        #print(f'Mathed ids, first association: {matched_ids_first_as}')
+        #print(f'Mathed ids, second association: {matched_ids_sec_as}')
+        #print(f'Unmatched dets: {len(unmatched_dets)}, unmatched trks: {len(unmatched_trks)}')
         
         """
             THIRD round of association, simple IoU matching by OCR according to oc-sort original code

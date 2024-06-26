@@ -8,7 +8,9 @@ import cv2
 
 from .ocsort_tracker.ocsort import OCSort
 from .ocsort_tracker.giocsort import GIOCSort
-from .ocsort_tracker.utils import convert_x_to_bbox
+from .ocsort_tracker.utils import *
+
+from .ocsort_tracker.kalmanfilter import predict as kf_predict
 
 def load_pointcloud_from_ros2_msg(msg):
     pc2_points = pc2.read_points_numpy(msg, field_names=("x", "y", "z"), skip_nans=True)
@@ -230,11 +232,34 @@ class ClusterBoundingBoxViz(Node):
 
             color = self.id_to_color[track_id]
             # make color darker by 0.1 but positive
-            color = np.clip(color - 0.1, 0, 1)
+            color = np.clip(color - 0.3, 0, 1)
 
             # Draw the future predictions
             for i in range(1, 2):
-                bbox = trk.get_state()[0]
+                """
+                    
+                    get_prediction(u, B, F, Q) -> (x, P);
+                        Predict next state (prior) using the Kalman filter state propagation
+                        B, F, Q are the Kalman filter parameters, initalized in the constructor
+                        State vector and covariance array of the prediction
+                    get_update(z) -> (x, P) ; 
+                        Computes the new estimate based on measurement `z`
+                        State vector and covariance array of the update.
+                    measurement_of_state(x) -> z;
+                        Helper function that converts a state into a measurement.
+                    
+                    predict -> update -> predict -> update -> ...
+                """
+                
+                x_current, P_current = trk.kf.x, trk.kf.P
+                x_next, P_next = kf_predict(x_current, P_current, F=trk.kf.F, Q=trk.kf.Q)
+                x_next, P_next = kf_predict(x_next, P_next, F=trk.kf.F, Q=trk.kf.Q)
+                x_next, P_next = kf_predict(x_next, P_next, F=trk.kf.F, Q=trk.kf.Q)
+                x_next, P_next = kf_predict(x_next, P_next, F=trk.kf.F, Q=trk.kf.Q)
+                x_next, P_next = kf_predict(x_next, P_next, F=trk.kf.F, Q=trk.kf.Q)
+
+                bbox = convert_x_to_bbox(x_next)[0]
+                
 
                 if bbox is None:
                     continue
