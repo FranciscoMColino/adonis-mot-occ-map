@@ -203,6 +203,69 @@ class ClusterBoundingBoxViz(Node):
         y2 = math.ceil((y2 - self.occupancy_grid.y_o) / self.occupancy_grid.resolution)
 
         return x1, y1, x2, y2
+    
+    def update_occ_grid_fast(self, trackers, safe_margin=0.1, k_ahead=30):
+
+        MAX_TIME_SINCE_UPDATE = 60
+        MIN_NUM_OBSERVATIONS = 10
+
+        for trk in trackers:
+
+            if trk.time_since_update > MAX_TIME_SINCE_UPDATE or len(trk.observations) < MIN_NUM_OBSERVATIONS:
+                continue
+
+            bbox = convert_x_to_bbox(trk.kf.x)[0]
+
+            if bbox is None or np.any(np.isnan(bbox)):
+                continue
+
+            x1, y1, x2, y2 = self.convert_bbox_to_grid_coords(bbox, safe_margin=safe_margin)
+            self.occupancy_grid.grid[y1:y2, x1:x2] = 1
+
+            if trk.object_type == KFTrackerObjectTypes.DYNAMIC:
+                future_bbox = convert_x_to_bbox(trk.get_k_away_prediction(k_ahead))[0]
+
+                if future_bbox is not None and not np.any(np.isnan(future_bbox)):
+
+                    future_x1, future_y1, future_x2, future_y2 = self.convert_bbox_to_grid_coords(future_bbox, safe_margin=safe_margin)
+
+                    center_cur = np.array([(x1 + x2) / 2, (y1 + y2) / 2])
+                    center_future = np.array([(future_x1 + future_x2) / 2, (future_y1 + future_y2) / 2])
+
+                    radius_cur = np.sqrt((center_cur[0] - x1) ** 2 + (center_cur[1] - y1) ** 2)
+                    radius_future = np.sqrt((center_future[0] - future_x1) ** 2 + (center_future[1] - future_y1) ** 2)
+
+                    vector_cur_to_future = center_future - center_cur
+                    vector_cur_to_future /= np.linalg.norm(vector_cur_to_future)
+
+                    vector_perpendicular = np.array([vector_cur_to_future[1], -vector_cur_to_future[0]])
+
+                    corner_1 = center_cur + vector_perpendicular * radius_cur
+                    corner_2 = center_cur - vector_perpendicular * radius_cur
+                    corner_3 = center_future + vector_perpendicular * radius_future
+                    corner_4 = center_future - vector_perpendicular * radius_future
+
+                    if np.any(np.isnan(corner_1)) or np.any(np.isnan(corner_2)) or np.any(np.isnan(corner_3)) or np.any(np.isnan(corner_4)):
+                        continue
+
+                    # Draw the line between the centers
+                    for i in range(0, 100):
+                        t = i / 100
+                        x = int(center_cur[0] + t * (center_future[0] - center_cur[0]))
+                        y = int(center_cur[1] + t * (center_future[1] - center_cur[1]))
+                        self.occupancy_grid.grid[y, x] = 1
+
+                    # Draw the line between the corners
+                    for i in range(0, 100):
+                        t = i / 100
+                        x = int(corner_1[0] + t * (corner_3[0] - corner_1[0]))
+                        y = int(corner_1[1] + t * (corner_3[1] - corner_1[1]))
+                        self.occupancy_grid.grid[y, x] = 1
+
+                        x = int(corner_2[0] + t * (corner_4[0] - corner_2[0]))
+                        y = int(corner_2[1] + t * (corner_4[1] - corner_2[1]))
+                        self.occupancy_grid.grid[y, x] = 1
+
 
     def update_occ_grid(self, trackers, safe_margin=0.1, k_ahead=30, radial_margin=2):
 
@@ -419,7 +482,7 @@ class ClusterBoundingBoxViz(Node):
         tracking_ids = tracking_res[:, 4]
 
         self.clear_occ_grid()
-        self.update_occ_grid(self.ocsort.get_trackers())
+        self.update_occ_grid_fast(self.ocsort.get_trackers(), safe_margin=0.1)
 
         """
             Draw the bounding boxes, point clouds and centroids
