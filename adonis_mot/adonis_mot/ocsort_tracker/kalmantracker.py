@@ -1,6 +1,7 @@
 import numpy as np
 from adonis_mot.ocsort_tracker.utils import *
 from adonis_mot.ocsort_tracker.association import iou_single
+from adonis_mot.ocsort_tracker.kalmanfilter import predict as kf_predict
 from enum import Enum
 
 
@@ -295,3 +296,13 @@ class KalmanBoxTracker(object):
         Returns the current bounding box estimate.
         """
         return convert_x_to_bbox(self.kf.x)
+    
+    def get_k_away_prediction(self, k):
+        """
+        Returns the k-th away prediction of the kalman filter.
+        """
+        x_next, P_next = self.kf.x, self.kf.P
+        for _ in range(k):
+            x_next, P_next = kf_predict(x_next, P_next, self.kf.F, self.kf.Q)
+
+        return x_next

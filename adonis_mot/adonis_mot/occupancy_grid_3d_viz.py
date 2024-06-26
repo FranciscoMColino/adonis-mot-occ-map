@@ -92,6 +92,8 @@ class ClusterBoundingBoxViz(Node):
             resolution=0.2
         )
 
+        self.future_pred_occ_weight = 0.5
+
     def setup_visualizer(self):
         # Add 8 points to initiate the visualizer's bounding box
         points = np.array([
@@ -180,7 +182,29 @@ class ClusterBoundingBoxViz(Node):
     def clear_occ_grid(self):
         self.occupancy_grid.grid = np.zeros((int(self.occupancy_grid.height / self.occupancy_grid.resolution), int(self.occupancy_grid.width / self.occupancy_grid.resolution)))
 
-    def update_occ_grid(self, trackers, safe_margin=0.1):
+    def convert_bbox_to_grid_coords(self, bbox, safe_margin=0.1):
+
+        x1, y1, x2, y2 = bbox[:4]
+
+        # add a safe margin
+        x1 -= safe_margin
+        y1 -= safe_margin
+        x2 += safe_margin
+        y2 += safe_margin
+
+        x1 = max(x1, self.occupancy_grid.x_o)
+        y1 = max(y1, self.occupancy_grid.y_o)
+        x2 = min(x2, self.occupancy_grid.x_o + self.occupancy_grid.width)
+        y2 = min(y2, self.occupancy_grid.y_o + self.occupancy_grid.height)
+
+        x1 = math.floor((x1 - self.occupancy_grid.x_o) / self.occupancy_grid.resolution)
+        y1 = math.floor((y1 - self.occupancy_grid.y_o) / self.occupancy_grid.resolution)
+        x2 = math.ceil((x2 - self.occupancy_grid.x_o) / self.occupancy_grid.resolution)
+        y2 = math.ceil((y2 - self.occupancy_grid.y_o) / self.occupancy_grid.resolution)
+
+        return x1, y1, x2, y2
+
+    def update_occ_grid(self, trackers, safe_margin=0.1, k_ahead=30):
 
         MAX_TIME_SINCE_UPDATE = 60
         MIN_NUM_OBSERVATIONS = 10
@@ -192,33 +216,36 @@ class ClusterBoundingBoxViz(Node):
                 
             bbox = convert_x_to_bbox(trk.kf.x)[0]
 
-            if bbox is None:
+            # check if the bbox is valid
+            if bbox is None or np.any(np.isnan(bbox)):
                 continue
 
-            #self.draw_bbox_from_tracker(bbox, [0, 1, 0])
-
-            # Update the occupancy grid
-            x1, y1, x2, y2 = bbox[:4]
-            x1, x2 = min(x1, x2), max(x1, x2)
-            y1, y2 = min(y1, y2), max(y1, y2)
-
-            # add a safe margin
-            x1 -= safe_margin
-            y1 -= safe_margin
-            x2 += safe_margin
-            y2 += safe_margin
-
-            x1 = max(x1, self.occupancy_grid.x_o)
-            y1 = max(y1, self.occupancy_grid.y_o)
-            x2 = min(x2, self.occupancy_grid.x_o + self.occupancy_grid.width)
-            y2 = min(y2, self.occupancy_grid.y_o + self.occupancy_grid.height)
-
-            x1 = math.floor((x1 - self.occupancy_grid.x_o) / self.occupancy_grid.resolution)
-            y1 = math.floor((y1 - self.occupancy_grid.y_o) / self.occupancy_grid.resolution)
-            x2 = math.ceil((x2 - self.occupancy_grid.x_o) / self.occupancy_grid.resolution)
-            y2 = math.ceil((y2 - self.occupancy_grid.y_o) / self.occupancy_grid.resolution)
-
+            # Update current bbox
+            x1, y1, x2, y2 = self.convert_bbox_to_grid_coords(bbox, safe_margin=safe_margin)
             self.occupancy_grid.grid[y1:y2, x1:x2] = 1
+
+            if trk.object_type == KFTrackerObjectTypes.DYNAMIC:
+                future_bbox = convert_x_to_bbox(trk.get_k_away_prediction(k_ahead))[0]
+
+                if future_bbox is not None and not np.any(np.isnan(future_bbox)):
+                    future_x1, future_y1, future_x2, future_y2 = self.convert_bbox_to_grid_coords(future_bbox, safe_margin=safe_margin)
+                    #self.occupancy_grid.grid[future_y1:future_y2, future_x1:future_x2] += self.future_pred_occ_weight
+                    #self.occupancy_grid.grid[future_y1:future_y2, future_x1:future_x2] = np.clip(self.occupancy_grid.grid[future_y1:future_y2, future_x1:future_x2], 0, 1)
+
+                    # Interpolate cells between the current bbox and the future bbox
+                    num_steps = 10
+                    step_weight = self.future_pred_occ_weight / num_steps
+                    for step in range(1, num_steps + 1):
+                        alpha = step / num_steps
+                        interp_x1 = int((1 - alpha) * x1 + alpha * future_x1)
+                        interp_y1 = int((1 - alpha) * y1 + alpha * future_y1)
+                        interp_x2 = int((1 - alpha) * x2 + alpha * future_x2)
+                        interp_y2 = int((1 - alpha) * y2 + alpha * future_y2)
+
+                        self.occupancy_grid.grid[interp_y1:interp_y2, interp_x1:interp_x2] += step_weight
+                        self.occupancy_grid.grid[interp_y1:interp_y2, interp_x1:interp_x2] = np.clip(self.occupancy_grid.grid[interp_y1:interp_y2, interp_x1:interp_x2], 0, 1)
+
+                        
 
     def draw_bbox_from_tracker(self, bbox, color):
         x1, y1, x2, y2 = bbox
@@ -338,38 +365,14 @@ class ClusterBoundingBoxViz(Node):
             color = self.id_to_color[track_id]
             # make color darker by 0.1 but positive
             color = np.clip(color - 0.3, 0, 1)
-
-            # Draw the future predictions
-            for i in range(1, 2):
-                """
-                    
-                    get_prediction(u, B, F, Q) -> (x, P);
-                        Predict next state (prior) using the Kalman filter state propagation
-                        B, F, Q are the Kalman filter parameters, initalized in the constructor
-                        State vector and covariance array of the prediction
-                    get_update(z) -> (x, P) ; 
-                        Computes the new estimate based on measurement `z`
-                        State vector and covariance array of the update.
-                    measurement_of_state(x) -> z;
-                        Helper function that converts a state into a measurement.
-                    
-                    predict -> update -> predict -> update -> ...
-                """
                 
-                x_current, P_current = trk.kf.x, trk.kf.P
-                x_next, P_next = kf_predict(x_current, P_current, F=trk.kf.F, Q=trk.kf.Q)
-                x_next, P_next = kf_predict(x_next, P_next, F=trk.kf.F, Q=trk.kf.Q)
-                x_next, P_next = kf_predict(x_next, P_next, F=trk.kf.F, Q=trk.kf.Q)
-                x_next, P_next = kf_predict(x_next, P_next, F=trk.kf.F, Q=trk.kf.Q)
-                x_next, P_next = kf_predict(x_next, P_next, F=trk.kf.F, Q=trk.kf.Q)
+            x_next = trk.get_k_away_prediction(30)
+            bbox = convert_x_to_bbox(x_next)[0]
+            
+            if bbox is None:
+                continue
 
-                bbox = convert_x_to_bbox(x_next)[0]
-                
-
-                if bbox is None:
-                    continue
-
-                self.draw_bbox_from_tracker(bbox, color)
+            self.draw_bbox_from_tracker(bbox, color)
 
     def callback(self, msg):
         self.vis.clear_geometries()
