@@ -204,12 +204,57 @@ class ClusterBoundingBoxViz(Node):
 
         return x1, y1, x2, y2
     
-    def update_occ_grid_fast(self, trackers, safe_margin=0.1, k_ahead=30):
+    # TODO move this to a separate file
+    def points_in_polygon(self, corners):
+        # corners is a list of tuples [(x1, y1), (x2, y2), ..., (xn, yn)]
+        # Assuming corners are given in counter-clockwise order
+
+        # Find bounding box of the polygon
+        xmin = min(x for x, y in corners)
+        xmax = max(x for x, y in corners)
+        ymin = min(y for x, y in corners)
+        ymax = max(y for x, y in corners)
+
+        points_inside = []
+
+        # Scanline algorithm
+        for y in range(ymin, ymax + 1):
+            intersections = []
+
+            # Find intersections of scanline with polygon edges
+            for i in range(len(corners)):
+                x1, y1 = corners[i]
+                x2, y2 = corners[(i + 1) % len(corners)]
+
+                if y1 <= y < y2 or y2 <= y < y1:
+                    # Calculate intersection x-coordinate
+                    if y1 == y2:
+                        continue  # Skip horizontal edges
+
+                    x_intersect = (y - y1) * (x2 - x1) / (y2 - y1) + x1
+                    intersections.append(x_intersect)
+
+            # Sort intersection points by x-coordinate
+            intersections.sort()
+
+            # Fill points between intersections
+            for j in range(0, len(intersections), 2):
+                x_start = int(intersections[j])
+                x_end = int(intersections[j + 1]) if j + 1 < len(intersections) else x_start
+
+                # Add all points (x, y) for this scanline segment
+                for x in range(x_start, x_end + 1):
+                    points_inside.append((x, y))
+
+        return points_inside
+    
+    # would it be faster to compute for all points in a box whose corners are the bbox cur and future or to compute just for the points in the polygon?
+    def update_occ_grid_poly(self, trackers, safe_margin_a=0.1, safe_margin_b=0.4, k_ahead=30):
 
         MAX_TIME_SINCE_UPDATE = 60
         MIN_NUM_OBSERVATIONS = 10
 
-        display_lines = True
+        display_lines = False
 
         for trk in trackers:
 
@@ -221,7 +266,7 @@ class ClusterBoundingBoxViz(Node):
             if bbox is None or np.any(np.isnan(bbox)):
                 continue
 
-            x1, y1, x2, y2 = self.convert_bbox_to_grid_coords(bbox, safe_margin=safe_margin)
+            x1, y1, x2, y2 = self.convert_bbox_to_grid_coords(bbox, safe_margin=safe_margin_a)
             self.occupancy_grid.grid[y1:y2, x1:x2] = 1
 
             if trk.object_type == KFTrackerObjectTypes.DYNAMIC:
@@ -229,15 +274,13 @@ class ClusterBoundingBoxViz(Node):
 
                 if future_bbox is not None and not np.any(np.isnan(future_bbox)):
 
-                    future_x1, future_y1, future_x2, future_y2 = self.convert_bbox_to_grid_coords(future_bbox, safe_margin=safe_margin)
-
-                    self.occupancy_grid.grid[future_y1:future_y2, future_x1:future_x2] = 0.5
+                    future_x1, future_y1, future_x2, future_y2 = self.convert_bbox_to_grid_coords(future_bbox, safe_margin=safe_margin_a)
 
                     center_cur = np.array([(x1 + x2) / 2, (y1 + y2) / 2])
                     center_future = np.array([(future_x1 + future_x2) / 2, (future_y1 + future_y2) / 2])
 
-                    radius_cur = np.sqrt((center_cur[0] - x1) ** 2 + (center_cur[1] - y1) ** 2)
-                    radius_future = np.sqrt((center_future[0] - future_x1) ** 2 + (center_future[1] - future_y1) ** 2)
+                    radius_cur = np.sqrt((center_cur[0] - x1) ** 2 + (center_cur[1] - y1) ** 2) + safe_margin_b
+                    radius_future = np.sqrt((center_future[0] - future_x1) ** 2 + (center_future[1] - future_y1) ** 2) + safe_margin_b
 
                     vector_cur_to_future = center_future - center_cur
                     vector_cur_to_future /= np.linalg.norm(vector_cur_to_future)
@@ -249,8 +292,31 @@ class ClusterBoundingBoxViz(Node):
                     corner_3 = center_future + vector_perpendicular * radius_future + vector_cur_to_future * radius_future
                     corner_4 = center_future - vector_perpendicular * radius_future + vector_cur_to_future * radius_future
 
+                    dist_cur_to_future = np.sqrt((center_cur[0] - center_future[0]) ** 2 + (center_cur[1] - center_future[1]) ** 2)
+
                     if np.any(np.isnan(corner_1)) or np.any(np.isnan(corner_2)) or np.any(np.isnan(corner_3)) or np.any(np.isnan(corner_4)):
                         continue
+                    
+                    corner_1 = corner_1.astype(int)
+                    corner_2 = corner_2.astype(int)
+                    corner_3 = corner_3.astype(int)
+                    corner_4 = corner_4.astype(int)
+
+                    points_inside = self.points_in_polygon([corner_1, corner_3, corner_4, corner_2])
+                    for x, y in points_inside:
+                        dist_cur = np.sqrt((x - center_cur[0]) ** 2 + (y - center_cur[1]) ** 2)
+                        dist_future = np.sqrt((x - center_future[0]) ** 2 + (y - center_future[1]) ** 2)
+                        total_dist = dist_cur + dist_future
+
+                        if total_dist != 0:
+                            value = (dist_future / total_dist) * 1 + (dist_cur / total_dist) * self.future_pred_occ_weight
+                        else:
+                            value = 0.5 * (1 + self.future_pred_occ_weight)
+
+                        value *= (dist_cur_to_future / total_dist) ** 3
+                        
+                        self.occupancy_grid.grid[y, x] += value
+                        self.occupancy_grid.grid[y, x] = np.clip(self.occupancy_grid.grid[y, x], 0, 1)
 
                     if display_lines:
                         # Draw the line between the centers
@@ -487,7 +553,7 @@ class ClusterBoundingBoxViz(Node):
         tracking_ids = tracking_res[:, 4]
 
         self.clear_occ_grid()
-        self.update_occ_grid_fast(self.ocsort.get_trackers(), safe_margin=0.1)
+        self.update_occ_grid_poly(self.ocsort.get_trackers())
 
         """
             Draw the bounding boxes, point clouds and centroids
