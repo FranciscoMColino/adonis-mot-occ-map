@@ -44,13 +44,13 @@ def get_track_struct_from_2d_bbox(bbox):
     return track
 
 class OccupancyGrid2DAdonis:
-    def __init__(self, x1, y1, x2, y2, resolution):
-        self.x1 = x1
-        self.y1 = y1
-        self.x2 = x2
-        self.y2 = y2
+    def __init__(self, x_o, y_o, width, height, resolution):
+        self.x_o = x_o
+        self.y_o = y_o
+        self.width = width
+        self.height = height
         self.resolution = resolution
-        self.grid = np.zeros((int((y2 - y1) / resolution), int((x2 - x1) / resolution)))
+        self.grid = np.zeros((int(height / resolution), int(width / resolution)))
 
 class ClusterBoundingBoxViz(Node):
     def __init__(self):
@@ -81,14 +81,12 @@ class ClusterBoundingBoxViz(Node):
         )
 
         self.occupancy_grid = OccupancyGrid2DAdonis(
-            x1=-5,
-            y1=-20,
-            x2=20,
-            y2=20,
+            x_o = -5,
+            y_o = -20,
+            width=30,
+            height=40,
             resolution=0.2
         )
-
-
 
     def setup_visualizer(self):
         # Add 8 points to initiate the visualizer's bounding box
@@ -119,11 +117,10 @@ class ClusterBoundingBoxViz(Node):
         self.vis.get_render_option().line_width = 10.0
 
     def draw_occ_grid_bounds(self):
-        x1, y1, x2, y2 = self.occupancy_grid.x1, self.occupancy_grid.y1, self.occupancy_grid.x2, self.occupancy_grid.y2
-
+        # draw the bounds of the occupancy grid in o3d
+        x1, y1, x2, y2 = self.occupancy_grid.x_o, self.occupancy_grid.y_o, self.occupancy_grid.x_o + self.occupancy_grid.width, self.occupancy_grid.y_o + self.occupancy_grid.height
         z1, z2 = 0, 10
 
-        # Draw the bounding box
         points = np.array([
             [x1, y1, z1],
             [x1, y1, z2],
@@ -140,10 +137,28 @@ class ClusterBoundingBoxViz(Node):
         point_cloud.paint_uniform_color([0, 0, 1])
         self.vis.add_geometry(point_cloud, reset_bounding_box=False)
 
-        bbox_o3d = point_cloud.get_axis_aligned_bounding_box()
-        bbox_o3d.color = [0, 0, 1]
-        self.vis.add_geometry(bbox_o3d, reset_bounding_box=False)
+        bbox = point_cloud.get_axis_aligned_bounding_box()
+        bbox.color = [0, 0, 1]
+        self.vis.add_geometry(bbox, reset_bounding_box=False)
 
+    def draw_occ_grid(self):
+        # Draw the occupancy grid in opencv2 new window
+        pass
+            
+    def clear_occ_grid(self):
+        self.occupancy_grid.grid = np.zeros((int(self.occupancy_grid.height / self.occupancy_grid.resolution), int(self.occupancy_grid.width / self.occupancy_grid.resolution)))
+
+    def update_occ_grid(self, trackers):
+
+        MAX_TIME_SINCE_UPDATE = 60
+        MIN_NUM_OBSERVATIONS = 5
+
+        for trk in trackers:
+
+            if trk.time_since_update > MAX_TIME_SINCE_UPDATE or len(trk.observations) < MIN_NUM_OBSERVATIONS:
+                continue
+                
+            pass
 
     def draw_bbox_from_tracker(self, bbox, color):
         x1, y1, x2, y2 = bbox
@@ -309,6 +324,9 @@ class ClusterBoundingBoxViz(Node):
         tracking_res = self.ocsort.update_v1(bboxes_to_track, centroids2d_array)
         tracking_ids = tracking_res[:, 4]
 
+        self.clear_occ_grid()
+        self.update_occ_grid(self.ocsort.get_trackers())
+
         """
             Draw the bounding boxes, point clouds and centroids
         """
@@ -369,7 +387,8 @@ class ClusterBoundingBoxViz(Node):
         #self.draw_trk_velocity_direction(self.ocsort.get_trackers(), tracking_ids)
         self.draw_future_predictions(self.ocsort.get_trackers(), None)
         self.draw_occ_grid_bounds()
-            
+        self.draw_occ_grid()
+
         self.vis.poll_events()
         self.vis.update_renderer()
 
