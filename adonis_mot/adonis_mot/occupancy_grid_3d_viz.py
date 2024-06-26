@@ -241,10 +241,20 @@ class ClusterBoundingBoxViz(Node):
             self.vis.add_geometry(line_set, reset_bounding_box=False)
 
     def draw_future_predictions(self, trackers, track_ids):
+
+        MAX_TIME_SINCE_UPDATE = 60
+        MIN_NUM_OBSERVATIONS = 5
+
         for trk in trackers:
             track_id = int(trk.id) + 1
 
             if track_ids is not None and track_id not in track_ids:
+                continue
+
+            if trk.time_since_update > MAX_TIME_SINCE_UPDATE or len(trk.observations) < MIN_NUM_OBSERVATIONS:
+                continue
+
+            if trk.object_type == KFTrackerObjectTypes.STATIC:
                 continue
 
             if track_id not in self.id_to_color:
@@ -357,7 +367,7 @@ class ClusterBoundingBoxViz(Node):
         #self.draw_kf_predict(self.ocsort.get_trackers())
         #self.draw_mean_bbox(self.ocsort.get_trackers(), tracking_ids)
         #self.draw_trk_velocity_direction(self.ocsort.get_trackers(), tracking_ids)
-        self.draw_future_predictions(self.ocsort.get_trackers(), tracking_ids)
+        self.draw_future_predictions(self.ocsort.get_trackers(), None)
         self.draw_occ_grid_bounds()
             
         self.vis.poll_events()
