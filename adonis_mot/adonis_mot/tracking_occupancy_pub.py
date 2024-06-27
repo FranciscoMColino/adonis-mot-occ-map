@@ -1,5 +1,6 @@
 import rclpy
 from rclpy.node import Node
+from nav_msgs.msg import OccupancyGrid
 from ember_detection_interfaces.msg import EmberClusterArray
 import numpy as np
 import open3d as o3d
@@ -18,6 +19,7 @@ class ClusterBoundingBoxViz(Node):
     def __init__(self):
         super().__init__('cluster_bbox_viz')
         self.sub = self.create_subscription(EmberClusterArray, '/ember_detection/ember_cluster_array', self.callback, 10)
+        self.pub = self.create_publisher(OccupancyGrid, '/tracking_occupancy/occupancy_grid', 10)
         
         self.o3d_viz = Open3DTrackerVisualizer()
         self.trk_label_viz = TrackerLabelVisualizer()
@@ -72,6 +74,10 @@ class ClusterBoundingBoxViz(Node):
         #self.clear_occ_grid()
         self.occupancy_grid.decay_occ_grid()
         self.occupancy_grid.update_occ_grid_poly(valid_in_scope_trks)
+
+        header = msg.header
+        occ_grid_msg = self.occupancy_grid.to_ros2_msg(header)
+        self.pub.publish(occ_grid_msg)
 
         self.o3d_viz.draw_ember_cluster_array(ember_cluster_array, tracking_res, bboxes_to_track)
 

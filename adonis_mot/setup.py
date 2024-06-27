@@ -25,6 +25,7 @@ setup(
             'ocsort_cluster_bbox_viz = adonis_mot.ocsort_cluster_bbox_viz:main',
             'ocsort_cluster_bbox_label_viz = adonis_mot.ocsort_cluster_bbox_label_viz:main',
             'occupancy_grid_3d_viz = adonis_mot.occupancy_grid_3d_viz:main',
+            'tracking_occupancy_pub = adonis_mot.tracking_occupancy_pub:main',
         ],
     },
 )

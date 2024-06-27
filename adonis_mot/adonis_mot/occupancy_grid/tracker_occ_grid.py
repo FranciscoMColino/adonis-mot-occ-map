@@ -1,6 +1,8 @@
 import numpy as np
 import math
 
+from nav_msgs.msg import OccupancyGrid
+
 from adonis_mot.ocsort_tracker.kalmantracker import ObjectTypes as KFTrackerObjectTypes
 from adonis_mot.ocsort_tracker.utils import convert_x_to_bbox
 
@@ -62,6 +64,23 @@ class TrackerOccGrid:
         self.cur_occ_weight = cur_occ_weight
         self.fut_occ_weight = fut_occ_weight
         self.decay_rate = decay_rate
+
+    def to_ros2_msg(self, header):
+        occ_grid_msg = OccupancyGrid()
+        occ_grid_msg.header.stamp = header.stamp
+        occ_grid_msg.header.frame_id = 'map'
+        occ_grid_msg.info.resolution = self.resolution
+        occ_grid_msg.info.width = self.grid.shape[1]
+        occ_grid_msg.info.height = self.grid.shape[0]
+        occ_grid_msg.info.origin.position.x = float(self.x_o)
+        occ_grid_msg.info.origin.position.y = float(self.y_o)
+        occ_grid_msg.info.origin.position.z = float(0)
+        occ_grid_msg.info.origin.orientation.x = float(0)
+        occ_grid_msg.info.origin.orientation.y = float(0)
+        occ_grid_msg.info.origin.orientation.z = float(0)
+        occ_grid_msg.info.origin.orientation.w = float(1)
+        occ_grid_msg.data = np.clip(self.grid* 100, 0, 100).flatten().astype(np.int8).tolist()
+        return occ_grid_msg
 
     def clear_occ_grid(self):
         self.grid = np.zeros((int(self.height / self.resolution), int(self.width / self.resolution)))
