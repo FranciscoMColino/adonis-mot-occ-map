@@ -171,8 +171,6 @@ class Open3DTrackerVisualizer:
                 self.id_to_color[track_id] = np.random.rand(3)
 
             color = self.id_to_color[track_id]
-            # make color darker by 0.1 but positive
-            color = np.clip(color - 0.3, 0, 1)
                 
             x_next = trk.get_k_away_prediction(30)
             bbox = convert_x_to_bbox(x_next)[0]
