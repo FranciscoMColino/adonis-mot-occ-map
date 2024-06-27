@@ -97,16 +97,9 @@ class TrackerOccGrid:
     def update_occ_grid_poly(self, trackers, safe_margin_a=0.1, safe_margin_b=0.4, k_ahead=30):
 
         # would it be faster to compute for all points in a box whose corners are the bbox cur and future or to compute just for the points in the polygon?
-
-        MAX_TIME_SINCE_UPDATE = 30
-        MIN_NUM_OBSERVATIONS = 10
-
         display_lines = False
 
         for trk in trackers:
-
-            if trk.time_since_update > MAX_TIME_SINCE_UPDATE or len(trk.observations) < MIN_NUM_OBSERVATIONS:
-                continue
 
             bbox = convert_x_to_bbox(trk.kf.x)[0]
 
@@ -185,14 +178,7 @@ class TrackerOccGrid:
                             self.grid[y, x] = 1
 
     def update_occ_grid_slow(self, trackers, safe_margin=0.1, k_ahead=30, radial_margin=2):
-
-        MAX_TIME_SINCE_UPDATE = 60
-        MIN_NUM_OBSERVATIONS = 10
-
         for trk in trackers:
-
-            if trk.time_since_update > MAX_TIME_SINCE_UPDATE or len(trk.observations) < MIN_NUM_OBSERVATIONS:
-                continue
                 
             bbox = convert_x_to_bbox(trk.kf.x)[0]
 

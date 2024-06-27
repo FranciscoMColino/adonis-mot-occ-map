@@ -83,19 +83,24 @@ class ClusterBoundingBoxViz(Node):
         tracking_res = self.ocsort.update_v1(bboxes_to_track, centroids2d_array)
         tracking_ids = tracking_res[:, 4]
 
+        MAX_TIME_SINCE_UPDATE = 30
+        MIN_NUM_OBSERVATIONS = 10
+
+        valid_in_scope_trks = np.array([trk for trk in self.ocsort.get_trackers() if trk.time_since_update < MAX_TIME_SINCE_UPDATE and trk.hits > MIN_NUM_OBSERVATIONS])
+        valid_by_id_trks = np.array([trk for trk in self.ocsort.get_trackers() if trk.id in tracking_ids])
+        valid_in_scope_id_trks = np.array([trk for trk in valid_by_id_trks if trk.time_since_update < MAX_TIME_SINCE_UPDATE and trk.hits > MIN_NUM_OBSERVATIONS])
+
         #self.clear_occ_grid()
         self.occupancy_grid.decay_occ_grid()
-        self.occupancy_grid.update_occ_grid_poly(self.ocsort.get_trackers())
-
+        self.occupancy_grid.update_occ_grid_poly(valid_in_scope_trks)
 
         self.o3d_viz.draw_ember_cluster_array(ember_cluster_array, tracking_res, bboxes_to_track)
 
-        #self.draw_kf_predict(self.ocsort.get_trackers())
-        #self.draw_mean_bbox(self.ocsort.get_trackers(), tracking_ids)
-        #self.draw_trk_velocity_direction(self.ocsort.get_trackers(), tracking_ids)
-        #self.draw_future_predictions(self.ocsort.get_trackers(), None)
-        #self.draw_occ_grid_bounds()
-
+        self.o3d_viz.draw_growth_bboxes(valid_in_scope_trks)
+        self.o3d_viz.draw_mean_bbox(valid_by_id_trks)
+        self.o3d_viz.draw_trk_velocity_direction(valid_by_id_trks)
+        self.o3d_viz.draw_future_predictions(valid_by_id_trks)
+        self.o3d_viz.draw_occ_grid_bounds(self.occupancy_grid)
         self.o3d_viz.render()
         
         objec_tracking_res_types = np.array([KFTrackerObjectTypes.STATIC] * len(tracking_res))
