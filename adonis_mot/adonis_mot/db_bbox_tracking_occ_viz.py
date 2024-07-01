@@ -8,6 +8,7 @@ import open3d as o3d
 import cv2
 import multiprocessing
 import signal
+import time
 
 from collections import deque
 import threading
@@ -69,10 +70,6 @@ class ClusterBoundingBoxViz(Node):
         self.pointcloud_sub = self.create_subscription(PointCloud2, '/zed/zed_node/point_cloud/cloud_registered', self.pointcloud_callback, 3)
         self.cluster_sub = self.create_subscription(EmberClusterArray, '/ember_detection/ember_cluster_array', self.cluster_callback, 3)
         self.pub = self.create_publisher(OccupancyGrid, '/tracking_occupancy/occupancy_grid', 10)
-        
-        #self.o3d_viz = Open3DTrackerVisualizer()
-        #self.trk_label_viz = TrackerLabelVisualizer()
-        #self.occ_grid_viz = OccupancyGridVisualizer()
 
         self.ocsort = GIOCSort(
             #det_thresh=0.5,
@@ -124,7 +121,7 @@ class ClusterBoundingBoxViz(Node):
             if time_diff < smallest_diff:
                 smallest_diff = time_diff
                 closest_msg = msg
-        print(f"Smallest diff: {smallest_diff}")
+        #print(f"Smallest diff: {smallest_diff}")
         return closest_msg
 
     def find_closest_cluster_msg(self, timestamp):
@@ -135,12 +132,12 @@ class ClusterBoundingBoxViz(Node):
             if time_diff < smallest_diff:
                 smallest_diff = time_diff
                 closest_msg = msg
-        print(f"Smallest diff: {smallest_diff}")
+        #print(f"Smallest diff: {smallest_diff}")
         return closest_msg
 
     def callback(self, msg):
         
-        #self.o3d_viz.reset()
+        start_time = time.time()
 
         ember_bbox_array = msg.boxes
 
@@ -167,19 +164,6 @@ class ClusterBoundingBoxViz(Node):
         occ_grid_msg = self.occupancy_grid.to_ros2_msg(header)
         self.pub.publish(occ_grid_msg)
 
-        #pointcloud_msg = self.find_closest_pointcloud_msg(header.stamp)
-        #if pointcloud_msg is None:
-        #    print("No pointcloud message found")
-        #else:
-        #    pointcloud_points = load_pointcloud_from_ros2_msg(pointcloud_msg)
-        #    self.o3d_viz.draw_pointcloud(pointcloud_points)
-
-        #cluster_msg = self.find_closest_cluster_msg(header.stamp)
-        #if cluster_msg is None:
-        #    print("No cluster message found")
-        #else:
-        #    self.o3d_viz.draw_ember_cluster_array_no_track(cluster_msg.clusters)
-
         objec_tracking_res_types = np.array([KFTrackerObjectTypes.STATIC] * len(tracking_res))
         for i, track in enumerate(tracking_res):
             track_id = int(track[4]-1)
@@ -203,11 +187,6 @@ class ClusterBoundingBoxViz(Node):
             vis_input["ember_cluster_array"] = None
 
         self.vis_input_queue.put(vis_input)
-
-        # Display the image with text overlay
-        # cv2.imshow(self.trk_label_viz.window_name, self.trk_label_viz.generate_frame(self.o3d_viz.vis, tracking_res, objec_tracking_res_types))
-        # cv2.imshow(self.occ_grid_viz.window_name, self.occ_grid_viz.generate_frame(self.occupancy_grid))
-        # cv2.waitKey(1)
 
 def signal_handler(sig, frame, node, process, queue):
     print("SIGINT received")
