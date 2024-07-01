@@ -1,7 +1,7 @@
 import rclpy
 from rclpy.node import Node
 from nav_msgs.msg import OccupancyGrid
-from ember_detection_interfaces.msg import EmberClusterArray
+from ember_detection_interfaces.msg import EmberBoundingBox3DArray
 import numpy as np
 import open3d as o3d
 import cv2
@@ -15,10 +15,10 @@ from adonis_mot.track_visualization.o3d_tracker_viz import Open3DTrackerVisualiz
 from adonis_mot.track_visualization.cv2_tracker_label_viz import TrackerLabelVisualizer
 from adonis_mot.track_visualization.cv2_occ_grid_viz import OccupancyGridVisualizer
 
-class BboxTrackingOccupancyPub(Node):
+class ClusterBoundingBoxViz(Node):
     def __init__(self):
-        super().__init__('bbox_tracking_occupancy_pub')
-        self.sub = self.create_subscription(EmberClusterArray, '/ember_detection/ember_cluster_array', self.callback, 10)
+        super().__init__('cluster_bbox_viz')
+        self.sub = self.create_subscription(EmberBoundingBox3DArray, '/ember_detection/ember_fusion_bboxes', self.callback, 10)
         self.pub = self.create_publisher(OccupancyGrid, '/tracking_occupancy/occupancy_grid', 10)
         
         self.o3d_viz = Open3DTrackerVisualizer()
@@ -55,11 +55,12 @@ class BboxTrackingOccupancyPub(Node):
         
         self.o3d_viz.reset()
 
-        ember_cluster_array = msg.clusters
+        ember_bbox_array = msg.boxes
 
-        bboxes_array = np.array([get_2d_bbox_from_3d_bbox(np.array([[p.x, p.y, p.z] for p in ember_cluster.bounding_box.points])) for ember_cluster in ember_cluster_array])
+        bboxes_array = np.array([get_2d_bbox_from_3d_bbox(np.array([[p.x, p.y, p.z] for p in ember_bbox.points])) for ember_bbox in ember_bbox_array])
         bboxes_to_track = np.array([get_track_struct_from_2d_bbox(bbox) for bbox in bboxes_array])
-        centroids2d_array = np.array([[cluster.centroid.x, cluster.centroid.y] for cluster in ember_cluster_array])
+        # centroids2d_array = np.array([[cluster.centroid.x, cluster.centroid.y] for cluster in ember_cluster_array]) TODO keep centroids in ember_bbox_array
+        centroids2d_array = np.array([get_centroid_from_bbox(bbox) for bbox in bboxes_array])
 
         tracking_res = self.ocsort.update_v1(bboxes_to_track, centroids2d_array)
         tracking_ids = tracking_res[:, 4]
@@ -78,8 +79,6 @@ class BboxTrackingOccupancyPub(Node):
         header = msg.header
         occ_grid_msg = self.occupancy_grid.to_ros2_msg(header)
         self.pub.publish(occ_grid_msg)
-
-        self.o3d_viz.draw_ember_cluster_array(ember_cluster_array, tracking_res, bboxes_to_track)
 
         self.o3d_viz.draw_growth_bboxes(valid_in_scope_trks)
         self.o3d_viz.draw_mean_bbox(valid_by_id_trks)
@@ -104,7 +103,7 @@ class BboxTrackingOccupancyPub(Node):
 
 def main(args=None):
     rclpy.init(args=args)
-    node = BboxTrackingOccupancyPub()
+    node = ClusterBoundingBoxViz()
     try:
         rclpy.spin(node)
     except KeyboardInterrupt:

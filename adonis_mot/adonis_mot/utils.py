@@ -30,3 +30,6 @@ def get_track_struct_from_2d_bbox(bbox):
     track[3] = bbox[1][1]
     track[4] = 1.0 # Dummy confidence score
     return track
+
+def get_centroid_from_bbox(bbox):
+    return np.mean(bbox, axis=0)
