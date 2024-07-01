@@ -6,6 +6,8 @@ from sensor_msgs.msg import PointCloud2
 import numpy as np
 import open3d as o3d
 import cv2
+import multiprocessing
+import signal
 
 from collections import deque
 import threading
@@ -19,8 +21,48 @@ from adonis_mot.track_visualization.o3d_tracker_viz import Open3DTrackerVisualiz
 from adonis_mot.track_visualization.cv2_tracker_label_viz import TrackerLabelVisualizer
 from adonis_mot.track_visualization.cv2_occ_grid_viz import OccupancyGridVisualizer
 
+def o3d_vis_worker(o3d_vis_input_queue):
+
+    def signal_handler(sig, frame):
+        print("SIGINT received")
+        o3d_vis_input_queue.put(None)
+        exit(0)
+
+    signal.signal(signal.SIGINT, signal_handler)
+
+    o3d_viz = Open3DTrackerVisualizer()
+    trk_label_viz = TrackerLabelVisualizer()
+    occ_grid_viz = OccupancyGridVisualizer()
+
+    while True:
+        msg = o3d_vis_input_queue.get()
+        if msg is None:
+            break
+
+        valid_in_scope_trks = msg["valid_in_scope_trks"]
+        occ_grid = msg["occ_grid"]
+        cluster_array = msg["ember_cluster_array"]
+        o3d_viz.reset()
+        o3d_viz.draw_growth_bboxes(valid_in_scope_trks)
+        o3d_viz.draw_mean_bbox(valid_in_scope_trks)
+        o3d_viz.draw_trk_velocity_direction(valid_in_scope_trks)
+        o3d_viz.draw_future_predictions(valid_in_scope_trks)
+        o3d_viz.draw_occ_grid_bounds(occ_grid)
+        if cluster_array is not None:
+            o3d_viz.draw_ember_cluster_array_no_track(cluster_array)
+        o3d_viz.render()
+
+        tracking_res = msg["tracking_res"]
+        objec_tracking_res_types = msg["objec_tracking_res_types"]
+
+        cv2.imshow(trk_label_viz.window_name, trk_label_viz.generate_frame(o3d_viz.vis, tracking_res, objec_tracking_res_types))
+        cv2.imshow(occ_grid_viz.window_name, occ_grid_viz.generate_frame(occ_grid))
+        cv2.waitKey(1)
+
+        
+
 class ClusterBoundingBoxViz(Node):
-    def __init__(self):
+    def __init__(self, vis_input_queue):
         super().__init__('cluster_bbox_viz')
         # Subscribers
         self.ember_sub = self.create_subscription(EmberBoundingBox3DArray, '/ember_detection/ember_fusion_bboxes', self.callback, 10)
@@ -28,9 +70,9 @@ class ClusterBoundingBoxViz(Node):
         self.cluster_sub = self.create_subscription(EmberClusterArray, '/ember_detection/ember_cluster_array', self.cluster_callback, 3)
         self.pub = self.create_publisher(OccupancyGrid, '/tracking_occupancy/occupancy_grid', 10)
         
-        self.o3d_viz = Open3DTrackerVisualizer()
-        self.trk_label_viz = TrackerLabelVisualizer()
-        self.occ_grid_viz = OccupancyGridVisualizer()
+        #self.o3d_viz = Open3DTrackerVisualizer()
+        #self.trk_label_viz = TrackerLabelVisualizer()
+        #self.occ_grid_viz = OccupancyGridVisualizer()
 
         self.ocsort = GIOCSort(
             #det_thresh=0.5,
@@ -64,6 +106,8 @@ class ClusterBoundingBoxViz(Node):
         # Lock for thread-safe operations
         self.lock = threading.Lock()
 
+        self.vis_input_queue = vis_input_queue
+
     def pointcloud_callback(self, msg):
         with self.lock:
             self.pointcloud_queue.append(msg)
@@ -96,7 +140,7 @@ class ClusterBoundingBoxViz(Node):
 
     def callback(self, msg):
         
-        self.o3d_viz.reset()
+        #self.o3d_viz.reset()
 
         ember_bbox_array = msg.boxes
 
@@ -130,19 +174,12 @@ class ClusterBoundingBoxViz(Node):
         #    pointcloud_points = load_pointcloud_from_ros2_msg(pointcloud_msg)
         #    self.o3d_viz.draw_pointcloud(pointcloud_points)
 
-        cluster_msg = self.find_closest_cluster_msg(header.stamp)
-        if cluster_msg is None:
-            print("No cluster message found")
-        else:
-            self.o3d_viz.draw_ember_cluster_array_no_track(cluster_msg.clusters)
+        #cluster_msg = self.find_closest_cluster_msg(header.stamp)
+        #if cluster_msg is None:
+        #    print("No cluster message found")
+        #else:
+        #    self.o3d_viz.draw_ember_cluster_array_no_track(cluster_msg.clusters)
 
-        self.o3d_viz.draw_growth_bboxes(valid_in_scope_trks)
-        self.o3d_viz.draw_mean_bbox(valid_in_scope_trks)
-        self.o3d_viz.draw_trk_velocity_direction(valid_in_scope_trks)
-        self.o3d_viz.draw_future_predictions(valid_in_scope_trks)
-        self.o3d_viz.draw_occ_grid_bounds(self.occupancy_grid)
-        self.o3d_viz.render()
-        
         objec_tracking_res_types = np.array([KFTrackerObjectTypes.STATIC] * len(tracking_res))
         for i, track in enumerate(tracking_res):
             track_id = int(track[4]-1)
@@ -152,19 +189,53 @@ class ClusterBoundingBoxViz(Node):
             else:
                 objec_tracking_res_types[i] = KFTrackerObjectTypes.INVALID
 
+        vis_input = {
+            "valid_in_scope_trks": valid_in_scope_trks,
+            "occ_grid": self.occupancy_grid,
+            "tracking_res": tracking_res,
+            "objec_tracking_res_types": objec_tracking_res_types
+        }
+
+        cluster_msg = self.find_closest_cluster_msg(header.stamp)
+        if cluster_msg is not None:
+            vis_input["ember_cluster_array"] = cluster_msg.clusters
+        else:
+            vis_input["ember_cluster_array"] = None
+
+        self.vis_input_queue.put(vis_input)
+
         # Display the image with text overlay
-        cv2.imshow(self.trk_label_viz.window_name, self.trk_label_viz.generate_frame(self.o3d_viz.vis, tracking_res, objec_tracking_res_types))
-        cv2.imshow(self.occ_grid_viz.window_name, self.occ_grid_viz.generate_frame(self.occupancy_grid))
-        cv2.waitKey(1)
+        # cv2.imshow(self.trk_label_viz.window_name, self.trk_label_viz.generate_frame(self.o3d_viz.vis, tracking_res, objec_tracking_res_types))
+        # cv2.imshow(self.occ_grid_viz.window_name, self.occ_grid_viz.generate_frame(self.occupancy_grid))
+        # cv2.waitKey(1)
+
+def signal_handler(sig, frame, node, process, queue):
+    print("SIGINT received")
+    queue.put(None)
+    process.terminate()
+    process.join()
+    node.destroy_node()
+    rclpy.shutdown()
+    exit(0)
 
 def main(args=None):
+
+    o3d_vis_input_queue = multiprocessing.Queue()
+    o3d_vis_worker_process = multiprocessing.Process(target=o3d_vis_worker, args=(o3d_vis_input_queue,))
+    o3d_vis_worker_process.start()
+
+    signal.signal(signal.SIGINT, lambda sig, frame: signal_handler(sig, frame, node, o3d_vis_worker_process, o3d_vis_input_queue))
+
     rclpy.init(args=args)
-    node = ClusterBoundingBoxViz()
+    node = ClusterBoundingBoxViz(o3d_vis_input_queue)
     try:
         rclpy.spin(node)
     except KeyboardInterrupt:
         pass
     finally:
+        o3d_vis_input_queue.put(None)
+        o3d_vis_worker_process.terminate()
+        o3d_vis_worker_process.join()
         node.destroy_node()
         rclpy.shutdown()
 
