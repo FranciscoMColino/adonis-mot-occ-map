@@ -235,4 +235,46 @@ class Open3DTrackerVisualizer:
             sphere.paint_uniform_color([0.7, 0, 1])
             self.vis.add_geometry(sphere, reset_bounding_box=False)
 
+    def draw_pointcloud(self, pointcloud, color=None):
+        point_cloud = o3d.geometry.PointCloud()
+        point_cloud.points = o3d.utility.Vector3dVector(pointcloud)
+        if color is not None:
+            point_cloud.paint_uniform_color(color)
+        self.vis.add_geometry(point_cloud, reset_bounding_box=False)
+
+    def draw_ember_cluster_array_no_track(self, ember_cluster_array):
+        """
+            Draw the bounding boxes, point clouds and centroids
+        """
+
+        for ember_cluster in ember_cluster_array:
+            ember_bbox = ember_cluster.bounding_box
+            ember_pc2 = ember_cluster.point_cloud
+            ember_centroid = ember_cluster.centroid
+
+            bbox_points = np.array([[p.x, p.y, p.z] for p in ember_bbox.points])
+
+            box_pc = o3d.geometry.PointCloud()
+            box_pc.points = o3d.utility.Vector3dVector(bbox_points)
+            box_pc.paint_uniform_color([1, 0, 0])
+            self.vis.add_geometry(box_pc, reset_bounding_box=False)
+
+            bbox = box_pc.get_axis_aligned_bounding_box()
+            bbox.color = [1, 0, 0]
+            self.vis.add_geometry(bbox, reset_bounding_box=False)
+
+            cluster_points = load_pointcloud_from_ros2_msg(ember_pc2)
+
+            cluster_point_cloud = o3d.geometry.PointCloud()
+            cluster_point_cloud.points = o3d.utility.Vector3dVector(cluster_points)
+            cluster_point_cloud.paint_uniform_color([0.6, 0.6, 0.6])
+            self.vis.add_geometry(cluster_point_cloud, reset_bounding_box=False)
+
+            # Draw the centroid
+            centroid = np.array([ember_centroid.x, ember_centroid.y, ember_centroid.z])
+            sphere = o3d.geometry.TriangleMesh.create_sphere(radius=0.05)
+            sphere.translate(centroid)
+            sphere.paint_uniform_color([0.7, 0, 1])
+            self.vis.add_geometry(sphere, reset_bounding_box=False)
+
 
