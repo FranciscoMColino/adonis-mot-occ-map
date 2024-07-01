@@ -81,9 +81,9 @@ class ClusterBoundingBoxViz(Node):
         self.pub.publish(occ_grid_msg)
 
         self.o3d_viz.draw_growth_bboxes(valid_in_scope_trks)
-        self.o3d_viz.draw_mean_bbox(valid_by_id_trks)
-        self.o3d_viz.draw_trk_velocity_direction(valid_by_id_trks)
-        self.o3d_viz.draw_future_predictions(valid_by_id_trks)
+        self.o3d_viz.draw_mean_bbox(valid_in_scope_trks)
+        self.o3d_viz.draw_trk_velocity_direction(valid_in_scope_trks)
+        self.o3d_viz.draw_future_predictions(valid_in_scope_trks)
         self.o3d_viz.draw_occ_grid_bounds(self.occupancy_grid)
         self.o3d_viz.render()
         
