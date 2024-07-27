@@ -27,7 +27,7 @@ setup(
             'occupancy_grid_3d_viz = adonis_mot.occupancy_grid_3d_viz:main',
             'cluster_tracking_occupancy_pub = adonis_mot.cluster_tracking_occupancy_pub:main',
             'bbox_tracking_occupancy_pub = adonis_mot.bbox_tracking_occupancy_pub:main',
-            'db_bbox_tracking_occ_viz = adonis_mot.db_bbox_tracking_occ_viz:main',
+            'main_bbox_tracking_occ_viz = adonis_mot.main_bbox_tracking_occ_viz:main',
         ],
     },
 )

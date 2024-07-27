@@ -105,6 +105,9 @@ class KalmanBoxTracker(object):
         bbox[3] = y_center + bbox_h / 2
         return bbox
     
+    def get_current_bbox(self):
+        return self.get_state()[0]
+    
     def interval_centroid_speed_direction(self, centroid, start_delta_t=30, end_delta_t=60):     
         previous_centroid = None
         velocities = np.zeros((end_delta_t - start_delta_t, 2))

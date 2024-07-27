@@ -9,6 +9,8 @@ import cv2
 import multiprocessing
 import signal
 import time
+import yaml
+import argparse
 
 from collections import deque
 import threading
@@ -21,6 +23,8 @@ from adonis_mot.occupancy_grid.tracker_occ_grid import TrackerOccGrid
 from adonis_mot.track_visualization.o3d_tracker_viz import Open3DTrackerVisualizer
 from adonis_mot.track_visualization.cv2_tracker_label_viz import TrackerLabelVisualizer
 from adonis_mot.track_visualization.cv2_occ_grid_viz import OccupancyGridVisualizer
+
+from adonis_mot.detection_recording.detection_recorder import Detection2dRecorder
 
 def o3d_vis_worker(o3d_vis_input_queue):
 
@@ -60,13 +64,17 @@ def o3d_vis_worker(o3d_vis_input_queue):
         cv2.imshow(occ_grid_viz.window_name, occ_grid_viz.generate_frame(occ_grid))
         cv2.waitKey(1)
 
-        
+class DetectionRecordingConfig:
+    def __init__(self, enable=False, save_dir=None):
+        self.enable = enable
+        self.save_dir = save_dir
 
 class ClusterBoundingBoxViz(Node):
-    def __init__(self, vis_input_queue):
+    def __init__(self, vis_input_queue, config_filename=None):
         super().__init__('cluster_bbox_viz')
         # Subscribers
-        self.ember_sub = self.create_subscription(EmberBoundingBox3DArray, '/ember_detection/ember_fusion_bboxes', self.callback, 10)
+        #self.detection_sub = self.create_subscription(EmberBoundingBox3DArray, '/ember_detection/ember_fusion_bboxes', self.callback, 10)
+        self.detection_sub = self.create_subscription(EmberBoundingBox3DArray, '/ember_detection/ermis_bbox_array', self.callback, 10)
         self.pointcloud_sub = self.create_subscription(PointCloud2, '/zed/zed_node/point_cloud/cloud_registered', self.pointcloud_callback, 3)
         self.cluster_sub = self.create_subscription(EmberClusterArray, '/ember_detection/ember_cluster_array', self.cluster_callback, 3)
         self.pub = self.create_publisher(OccupancyGrid, '/tracking_occupancy/occupancy_grid', 10)
@@ -97,13 +105,33 @@ class ClusterBoundingBoxViz(Node):
             decay_rate=0.1
         )
 
-        self.pointcloud_queue = deque(maxlen=120)
-        self.cluster_queue = deque(maxlen=120)
+        self.pointcloud_queue = deque(maxlen=30)
+        self.cluster_queue = deque(maxlen=30)
         
         # Lock for thread-safe operations
         self.lock = threading.Lock()
 
         self.vis_input_queue = vis_input_queue
+
+        self.load_config(config_filename)
+
+        if self.detection_recording_config.enable:
+            self.detection_recorder = Detection2dRecorder(self.detection_recording_config.save_dir)
+
+    def load_config(self, config_filename):
+        with open(config_filename, 'r') as stream:
+            try:
+                data = yaml.safe_load(stream)
+                if data['detection_recording'] is not None and data['detection_recording']['enable']:
+                    self.detection_recording_config = DetectionRecordingConfig(
+                        enable=data['detection_recording']['enable'],
+                        save_dir=data['detection_recording']['save_dir']
+                    )
+                else:
+                    self.detection_recording_config = DetectionRecordingConfig(enable=False)
+            except yaml.YAMLError as exc:
+                print(exc)
+        
 
     def pointcloud_callback(self, msg):
         with self.lock:
@@ -150,7 +178,7 @@ class ClusterBoundingBoxViz(Node):
         tracking_ids = tracking_res[:, 4]
 
         MAX_TIME_SINCE_UPDATE = 60
-        MIN_NUM_OBSERVATIONS = 10
+        MIN_NUM_OBSERVATIONS = 15
 
         valid_in_scope_trks = np.array([trk for trk in self.ocsort.get_trackers() if trk.time_since_update < MAX_TIME_SINCE_UPDATE and trk.hits > MIN_NUM_OBSERVATIONS])
         valid_by_id_trks = np.array([trk for trk in self.ocsort.get_trackers() if trk.id in tracking_ids])
@@ -180,6 +208,20 @@ class ClusterBoundingBoxViz(Node):
             "objec_tracking_res_types": objec_tracking_res_types
         }
 
+        if self.detection_recording_config.enable:
+            # use valid_in_scope_trks to get the bboxes and centroids
+            bboxes_points = []
+            centroids = []
+            for trk in valid_in_scope_trks:
+                p1_x, p1_y, p2_x, p2_y = trk.get_current_bbox()
+                bbox = np.array([[p1_x, p1_y], [p2_x, p1_y], [p2_x, p2_y], [p1_x, p2_y]])
+                centroid = np.mean(bbox, axis=0)
+                bboxes_points.append(bbox)
+                centroids.append(centroid)
+            self.detection_recorder.record(bboxes_points, centroids, header.stamp.sec, header.stamp.nanosec)
+                
+            
+
         cluster_msg = self.find_closest_cluster_msg(header.stamp)
         if cluster_msg is not None:
             vis_input["ember_cluster_array"] = cluster_msg.clusters
@@ -199,6 +241,10 @@ def signal_handler(sig, frame, node, process, queue):
 
 def main(args=None):
 
+    parser = argparse.ArgumentParser(description='Open3D Point Cloud Visualizer')
+    parser.add_argument('config_fp', type=str, help='Filepath for configuration file')
+    parsed_args = parser.parse_args(args=args)
+
     o3d_vis_input_queue = multiprocessing.Queue()
     o3d_vis_worker_process = multiprocessing.Process(target=o3d_vis_worker, args=(o3d_vis_input_queue,))
     o3d_vis_worker_process.start()
@@ -206,7 +252,7 @@ def main(args=None):
     signal.signal(signal.SIGINT, lambda sig, frame: signal_handler(sig, frame, node, o3d_vis_worker_process, o3d_vis_input_queue))
 
     rclpy.init(args=args)
-    node = ClusterBoundingBoxViz(o3d_vis_input_queue)
+    node = ClusterBoundingBoxViz(o3d_vis_input_queue, config_filename=parsed_args.config_fp)
     try:
         rclpy.spin(node)
     except KeyboardInterrupt:

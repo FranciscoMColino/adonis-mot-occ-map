@@ -1,0 +1,3 @@
+detection_recording:
+  enable: True
+  save_dir: "data/adonis_detection/dynamic_no_occlusion/TransporterPallet-SideToSide-CloseRange-1"
