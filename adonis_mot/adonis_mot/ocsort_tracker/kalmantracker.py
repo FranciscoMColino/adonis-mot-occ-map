@@ -62,12 +62,13 @@ class KalmanBoxTracker(object):
         self.history_centroids = []
 
         self.velocity = None
+        self.velocity_magnitude = 0
         self.ignore_t = ignore_t
         self.delta_t = delta_t
 
         self.growth_rate = growth_rate
         self.start_growth_t = 0     # TODO make this a parameter
-        self.start_growth_boost = 1 # TODO make this a parameter
+        self.start_growth_boost = 0 # TODO make this a parameter
 
         self.mean_w = None
         self.mean_h = None
@@ -147,6 +148,26 @@ class KalmanBoxTracker(object):
             velocity = speed_direction(self.last_observation, bbox)
 
         return velocity
+    
+    def interval_speed_magnitude(self, bbox, start_delta_t=30, end_delta_t=60):
+
+        previous_box = None
+        magnitudes = np.zeros(end_delta_t - start_delta_t)
+        for i in range(start_delta_t, end_delta_t):
+            dt = end_delta_t - i
+            if self.age - dt in self.observations:
+                previous_box = self.observations[self.age-dt]
+                index = i - start_delta_t
+                magnitudes[index] = speed_magnitude(previous_box, bbox)
+
+        magnitudes = magnitudes[~np.all(magnitudes == 0)]
+
+        if len(magnitudes) > 0:
+            magnitude = np.mean(magnitudes)
+        else:
+            magnitude = speed_magnitude(self.last_observation, bbox)
+
+        return magnitude
 
     def delta_speed_direction(self, bbox, delta_t=3):
         previous_box = None
@@ -178,8 +199,9 @@ class KalmanBoxTracker(object):
             self.object_type = ObjectTypes.STATIC
         else:
             self.object_type = ObjectTypes.DYNAMIC
+    
 
-    def update(self, bbox, centroid=None):
+    def update(self, bbox, timestamp=None):
         """
         Updates the state vector with observed bbox.
         """
@@ -191,11 +213,14 @@ class KalmanBoxTracker(object):
                 """
                   Estimate the track speed direction
                 """
-                if centroid is not None:
-                    self.velocity = self.interval_centroid_speed_direction(centroid, self.ignore_t, self.delta_t)
-                else:
-                    #self.velocity = self.delta_speed_direction(bbox, self.delta_t)
-                    self.velocity = self.interval_mean_speed_direction(bbox, self.ignore_t, self.delta_t)
+                self.velocity = self.interval_mean_speed_direction(bbox, self.ignore_t, self.delta_t)
+                self.velocity_magnitude = self.interval_speed_magnitude(bbox, 10, 20)
+                # THESE DO THE SAME THING
+                #if centroid is not None: 
+                #    self.speed_direction = self.interval_centroid_speed_direction(centroid, self.ignore_t, self.delta_t)
+                #else:
+                #    #self.speed_direction = self.delta_speed_direction(bbox, self.delta_t)
+                #    self.speed_direction = self.interval_mean_speed_direction(bbox, self.ignore_t, self.delta_t)
             
             """
               Insert new observations. This is a ugly way to maintain both self.observations
@@ -205,10 +230,10 @@ class KalmanBoxTracker(object):
             self.observations[self.age] = bbox
             self.history_observations.append(bbox)
 
-            if centroid is not None:
-                self.last_centroid = centroid
-                self.observed_centroids[self.age] = centroid
-                self.history_centroids.append(centroid)
+            #if centroid is not None:
+            #    self.last_centroid = centroid
+            #    self.observed_centroids[self.age] = centroid
+            #    self.history_centroids.append(centroid)
 
             self.time_since_update = 0
             self.history = []
@@ -241,7 +266,8 @@ class KalmanBoxTracker(object):
 
         bbox_mean_size = (bbox_w + bbox_h) / 2
         
-        bbox_mean_increase = bbox_mean_size * self.growth_rate * (self.time_since_update - self.start_growth_t + self.start_growth_boost)
+        #bbox_mean_increase = bbox_mean_size * self.growth_rate * (self.time_since_update - self.start_growth_t + self.start_growth_boost)
+        bbox_mean_increase = (self.velocity_magnitude*self.growth_rate) * (self.time_since_update - self.start_growth_t + self.start_growth_boost)
 
         bbox_w_increase = bbox_mean_increase
         bbox_h_increase = bbox_mean_increase

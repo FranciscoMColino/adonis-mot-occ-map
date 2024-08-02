@@ -274,7 +274,7 @@ def associate_growth_boxes(detections, trackers, iou_threshold, tracker_ages, ag
     age_cost = age_cost * age_weight
 
     if min(iou_matrix.shape) > 0:
-        # Total cost is a combination of IOU, angle difference, and age
+        # Total cost is a combination of IOU and age
         total_cost = -(iou_matrix + age_cost)
         a = (iou_matrix > iou_threshold).astype(np.int32)
         if a.sum(1).max() == 1 and a.sum(0).max() == 1:

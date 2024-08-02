@@ -96,8 +96,8 @@ class ClusterBoundingBoxViz(Node):
             max_age=60,
             inertia=0.5,        # 0.8
             intertia_age_weight=0.3,
-            growth_rate=0.40,
-            growth_age_weight=0.2,
+            growth_rate=0.175,
+            growth_age_weight=0.1,
         )
 
         # ado1 config
@@ -207,6 +207,11 @@ class ClusterBoundingBoxViz(Node):
         start_time = time.time()
 
         ember_bbox_array = msg.boxes
+
+        seconds = msg.header.stamp.sec
+        nanoseconds = msg.header.stamp.nanosec
+
+        print(f"Received message at {seconds}.{nanoseconds}")
 
         bboxes_array = np.array([get_2d_bbox_from_3d_bbox(np.array([[p.x, p.y, p.z] for p in ember_bbox.points])) for ember_bbox in ember_bbox_array])
         bboxes_to_track = np.array([get_track_struct_from_2d_bbox(bbox) for bbox in bboxes_array])

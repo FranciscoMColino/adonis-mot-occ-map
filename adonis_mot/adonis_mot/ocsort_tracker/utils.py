@@ -44,6 +44,12 @@ def speed_direction(bbox1, bbox2):
     norm = np.sqrt((cy2-cy1)**2 + (cx2-cx1)**2) + 1e-6
     return speed / norm
 
+def speed_magnitude(bbox1, bbox2):
+    cx1, cy1 = (bbox1[0]+bbox1[2]) / 2.0, (bbox1[1]+bbox1[3])/2.0
+    cx2, cy2 = (bbox2[0]+bbox2[2]) / 2.0, (bbox2[1]+bbox2[3])/2.0
+    norm = np.sqrt((cy2-cy1)**2 + (cx2-cx1)**2) + 1e-6
+    return norm
+
 def centroid_speed_direction(centroid1, centroid2):
     # the order of the coordinates is reversed since the ported code came with the order reversed
     speed = np.array([centroid2[1]-centroid1[1], centroid2[0]-centroid1[0]])
