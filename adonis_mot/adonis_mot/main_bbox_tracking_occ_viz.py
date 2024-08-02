@@ -40,6 +40,12 @@ def o3d_vis_worker(o3d_vis_input_queue):
     occ_grid_viz = OccupancyGridVisualizer()
 
     while True:
+
+        if o3d_vis_input_queue.empty():
+            o3d_viz.render()
+            time.sleep(1/120)
+            continue
+
         msg = o3d_vis_input_queue.get()
         if msg is None:
             break
