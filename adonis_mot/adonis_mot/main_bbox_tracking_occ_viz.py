@@ -88,17 +88,50 @@ class ClusterBoundingBoxViz(Node):
         self.ocsort = GIOCSort(
             #det_thresh=0.5,
             inertia_iou_threshold=0.05,
-            growth_iou_threshold=0.002,
+            growth_iou_threshold=0.001,
             default_iou_threshold=0.02,
-            ignore_t=30,
-            delta_t=90,          
+            ignore_t=0,
+            delta_t=15,          
             min_hits=5,
             max_age=60,
             inertia=0.5,        # 0.8
             intertia_age_weight=0.3,
-            growth_rate=0.15,
-            growth_age_weight=1.2,
+            growth_rate=0.40,
+            growth_age_weight=0.2,
         )
+
+        # ado1 config
+        #self.ocsort = GIOCSort(
+        #    #det_thresh=0.5,
+        #    inertia_iou_threshold=0.80,
+        #    growth_iou_threshold=0.10,
+        #    default_iou_threshold=0.20,
+        #    ignore_t=30,
+        #    delta_t=90,          
+        #    min_hits=10,
+        #    max_age=60,
+        #    inertia=0.5,        # 0.8
+        #    intertia_age_weight=0.5,
+        #    growth_rate=0.15,
+        #    growth_age_weight=0.8,
+        #)
+
+        # ado2 config
+        # self.ocsort = GIOCSort(
+        #     #det_thresh=0.5,
+        #     inertia_iou_threshold=0.05,
+        #     growth_iou_threshold=0.002,
+        #     default_iou_threshold=0.20,
+        #     ignore_t=0,
+        #     delta_t=25,          
+        #     min_hits=10,
+        #     max_age=60,
+        #     inertia=0.8,        # 0.8
+        #     intertia_age_weight=1.2,
+        #     growth_rate=0.2,
+        #     growth_age_weight=1.2,
+        # )
+        
 
         self.occupancy_grid = TrackerOccGrid(
             x_o = -50,
@@ -107,7 +140,7 @@ class ClusterBoundingBoxViz(Node):
             height=100,
             resolution=0.2,
             cur_occ_weight=0.2,
-            fut_occ_weight=0.18,
+            fut_occ_weight=0.05,  #0.18,
             decay_rate=0.1
         )
 
@@ -181,7 +214,7 @@ class ClusterBoundingBoxViz(Node):
         centroids2d_array = np.array([get_centroid_from_bbox(bbox) for bbox in bboxes_array])
 
         tracking_res = self.ocsort.update_v1(bboxes_to_track, centroids2d_array)
-        tracking_ids = tracking_res[:, 4]
+        tracking_ids = tracking_res[:, 4] - 1 # on update, the tracker id is incremented by 1
 
         MAX_TIME_SINCE_UPDATE = 60
         MIN_NUM_OBSERVATIONS = 15
@@ -189,6 +222,8 @@ class ClusterBoundingBoxViz(Node):
         valid_in_scope_trks = np.array([trk for trk in self.ocsort.get_trackers() if trk.time_since_update < MAX_TIME_SINCE_UPDATE and trk.hits > MIN_NUM_OBSERVATIONS])
         valid_by_id_trks = np.array([trk for trk in self.ocsort.get_trackers() if trk.id in tracking_ids])
         valid_in_scope_id_trks = np.array([trk for trk in valid_by_id_trks if trk.time_since_update < MAX_TIME_SINCE_UPDATE and trk.hits > MIN_NUM_OBSERVATIONS])
+
+        print(f"Valid in scope trackers: {[trk.id for trk in valid_in_scope_trks]}")
 
         #self.clear_occ_grid()
         self.occupancy_grid.decay_occ_grid()
@@ -219,8 +254,19 @@ class ClusterBoundingBoxViz(Node):
             bboxes_points = []
             centroids = []
             for trk in valid_in_scope_trks:
-                p1_x, p1_y, p2_x, p2_y = trk.get_current_bbox()
+                # get position of element in tracking_ids
+                if trk.id not in tracking_ids:
+                    p1_x, p1_y, p2_x, p2_y = trk.get_state()[0][:4]
+                else:
+                    if trk.last_observation.sum() < 0:
+                        print(f"ERROR: no last observation for track {trk.id}, using current state")
+                        p1_x, p1_y, p2_x, p2_y = trk.get_state()[0][:4]
+                    else:
+                        p1_x, p1_y, p2_x, p2_y = trk.last_observation[:4]
+
+            
                 bbox = np.array([[p1_x, p1_y], [p2_x, p1_y], [p2_x, p2_y], [p1_x, p2_y]])
+
                 centroid = np.mean(bbox, axis=0)
                 bboxes_points.append(bbox)
                 centroids.append(centroid)

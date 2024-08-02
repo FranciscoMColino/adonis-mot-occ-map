@@ -20,6 +20,9 @@ ASSO_FUNCS = {  "iou": iou_batch,
                 "diou": diou_batch,
                 "ct_dist": ct_dist}
 
+def get_centroid_from_bbox(bbox):
+        x_min, y_min, x_max, y_max = bbox[:4]
+        return np.array([(x_min + x_max) / 2, (y_min + y_max) / 2])
 
 class GIOCSort(object):
     def __init__(self, max_age=30, min_hits=3, inertia_iou_threshold=0.2, growth_iou_threshold=0.1, default_iou_threshold=0.3,
@@ -175,7 +178,7 @@ class GIOCSort(object):
         if len(ret) > 0:
             return np.concatenate(ret)
         return np.empty((0, 5))
-
+    
     def update_v1(self, dets, centroids=None):
         """
         Params:
@@ -219,7 +222,8 @@ class GIOCSort(object):
         matched_first_as, unmatched_dets_first_as, unmatched_trks_first_as = associate_growth_boxes(
             dets, grown_trks, self.growth_iou_threshold, tracker_ages, self.growth_age_weight)
         for m in matched_first_as:
-            self.trackers[m[1]].update(dets[m[0], :])
+            det_ind, trk_ind = m[0], m[1]
+            self.trackers[trk_ind].update(dets[det_ind, :], get_centroid_from_bbox(dets[det_ind, :]))
 
         unmatched_dets_first_to_second_map = dict()
         for i in range(len(unmatched_dets_first_as)):
@@ -228,6 +232,9 @@ class GIOCSort(object):
         unmatched_trks_first_to_second_map = dict()
         for i in range(len(unmatched_trks_first_as)):
             unmatched_trks_first_to_second_map[i] = unmatched_trks_first_as[i]
+
+        # print trk ids tracked through growth
+        print(f'Grown trk ids: {[self.trackers[matched_trk[1]].id for matched_trk in matched_first_as]}')
 
         """
             SECOND round of association, based on inertia and tracker ages
@@ -245,8 +252,9 @@ class GIOCSort(object):
             dets_sec_as, trks_sec_as, self.inertia_iou_threshold, velocities_sec_as, k_observations_sec_as, 
             self.inertia, tracker_ages_sec_as, self.inertia_age_weight)
         for m in matched_sec_as:
-            tracker_ind = unmatched_trks_first_as[m[1]]
-            self.trackers[tracker_ind].update(dets_sec_as[m[0], :])
+            trk_ind = m[1]
+            det_ind = m[0]
+            self.trackers[trk_ind].update(dets_sec_as[det_ind, :])
 
         unmatched_dets = np.array([unmatched_dets_first_to_second_map[i] for i in unmatched_dets_sec_as])
         unmatched_trks = np.array([unmatched_trks_first_to_second_map[i] for i in unmatched_trks_sec_as])
@@ -257,6 +265,9 @@ class GIOCSort(object):
         #print(f'Mathed ids, first association: {matched_ids_first_as}')
         #print(f'Mathed ids, second association: {matched_ids_sec_as}')
         #print(f'Unmatched dets: {len(unmatched_dets)}, unmatched trks: {len(unmatched_trks)}')
+
+        # print trk ids tracked through inertia
+        print(f'Inertia trk ids: {[self.trackers[matched_trk[1]].id for matched_trk in matched_sec_as]}')
         
         """
             THIRD round of association, simple IoU matching by OCR according to oc-sort original code
@@ -275,7 +286,7 @@ class GIOCSort(object):
                     det_ind, trk_ind = unmatched_dets[m[0]], unmatched_trks[m[1]]
                     if iou_left[m[0], m[1]] < self.default_iou_threshold:
                         continue
-                    self.trackers[trk_ind].update(dets[det_ind, :], centroids[det_ind])
+                    self.trackers[trk_ind].update(dets[det_ind, :], get_centroid_from_bbox(dets[det_ind, :]))
                     to_remove_det_indices.append(det_ind)
                     to_remove_trk_indices.append(trk_ind)
                 unmatched_dets = np.setdiff1d(unmatched_dets, np.array(to_remove_det_indices))
