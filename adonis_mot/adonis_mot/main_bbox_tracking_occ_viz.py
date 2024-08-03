@@ -54,7 +54,8 @@ def o3d_vis_worker(o3d_vis_input_queue):
         occ_grid = msg["occ_grid"]
         cluster_array = msg["ember_cluster_array"]
         o3d_viz.reset()
-        o3d_viz.draw_growth_bboxes(valid_in_scope_trks)
+        #o3d_viz.draw_growth_bboxes(valid_in_scope_trks)
+        o3d_viz.draw_growth_areas(valid_in_scope_trks)
         o3d_viz.draw_mean_bbox(valid_in_scope_trks)
         o3d_viz.draw_trk_velocity_direction(valid_in_scope_trks)
         o3d_viz.draw_future_predictions(valid_in_scope_trks)
@@ -96,8 +97,8 @@ class ClusterBoundingBoxViz(Node):
             max_age=60,
             inertia=0.5,        # 0.8
             intertia_age_weight=0.3,
-            growth_rate=0.175,
-            growth_age_weight=0.1,
+            growth_rate=0.175,#0.175,
+            growth_age_weight=0.25,
         )
 
         # ado1 config
@@ -218,7 +219,7 @@ class ClusterBoundingBoxViz(Node):
         # centroids2d_array = np.array([[cluster.centroid.x, cluster.centroid.y] for cluster in ember_cluster_array]) TODO keep centroids in ember_bbox_array
         centroids2d_array = np.array([get_centroid_from_bbox(bbox) for bbox in bboxes_array])
 
-        tracking_res = self.ocsort.update_v1(bboxes_to_track, centroids2d_array)
+        tracking_res = self.ocsort.update_v3(bboxes_to_track)
         tracking_ids = tracking_res[:, 4] - 1 # on update, the tracker id is incremented by 1
 
         MAX_TIME_SINCE_UPDATE = 60

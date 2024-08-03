@@ -298,6 +298,32 @@ class KalmanBoxTracker(object):
             bbox[3] += pred_direction[0] * bbox_mean_increase/2
 
         return bbox
+    
+    def get_growth_area(self, bbox=None):
+
+        if bbox is None:
+            return None, None
+        
+        bbox_w = np.abs(bbox[2] - bbox[0])
+        bbox_h = np.abs(bbox[3] - bbox[1])
+
+        max_bbox_dim = max(bbox_w, bbox_h)
+
+        growth_area_radius = self.velocity_magnitude * self.growth_rate * (self.time_since_update - self.start_growth_t + self.start_growth_boost)
+
+        if max_bbox_dim > growth_area_radius:
+            growth_area_radius = max_bbox_dim
+            growth_area_center = np.array([
+                ((bbox[0] + bbox[2]) / 2),
+                ((bbox[1] + bbox[3]) / 2)
+            ])
+        else:
+            growth_area_center = np.array([
+                ((bbox[0] + bbox[2]) / 2) + self.velocity[1] * growth_area_radius/2,
+                ((bbox[1] + bbox[3]) / 2) + self.velocity[0] * growth_area_radius/2
+            ])
+        return growth_area_center, growth_area_radius
+            
 
     def predict(self):
         """
@@ -321,6 +347,12 @@ class KalmanBoxTracker(object):
         bbox = self.history[-1][0]
         return self.grow_bbox(bbox)
         
+    def get_current_growth_area(self):
+        if len(self.history) == 0:
+            return None, None
+        bbox = self.history[-1][0]
+        return self.get_growth_area(bbox)
+
     def get_state(self):
         """
         Returns the current bounding box estimate.

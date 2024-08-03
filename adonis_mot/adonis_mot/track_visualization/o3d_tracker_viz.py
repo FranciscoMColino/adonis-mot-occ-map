@@ -115,6 +115,23 @@ class Open3DTrackerVisualizer:
 
             self.draw_bbox_from_tracker(bbox, self.id_to_color[track_id])
 
+    def draw_growth_areas(self, trackers):
+        for trk in trackers:
+            track_id = int(trk.id) + 1
+
+            if track_id not in self.id_to_color:
+                self.id_to_color[track_id] = np.random.rand(3)
+
+            center, radius = trk.get_current_growth_area()
+            if center is None or radius is None:
+                continue
+
+            # draw the growth area as a circle
+            circle = o3d.geometry.TriangleMesh.create_cylinder(radius=radius, height=0.1)
+            circle.translate(np.concatenate([center, [0]]))
+            circle.paint_uniform_color(self.id_to_color[track_id])
+            self.vis.add_geometry(circle, reset_bounding_box=False)
+
     def draw_mean_bbox(self, trackers):
         for trk in trackers:
             track_id = int(trk.id) + 1
