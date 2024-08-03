@@ -74,6 +74,11 @@ class KalmanBoxTracker(object):
         self.mean_h = None
         self.mean_count = 0
 
+        self.box_z_values = [-0.5, 0.5]
+        self.last_box_z_values = np.array([-100, -100])
+        self.observed_z_values = dict()
+        self.history_z_values = []
+
         self.box_dims = None
         
         self.object_type = ObjectTypes.DYNAMIC # default object type is dynamic
@@ -169,6 +174,25 @@ class KalmanBoxTracker(object):
 
         return magnitude
 
+    def interval_z_values(self, z_values, start_delta_t=30, end_delta_t=60):
+        previous_z_values = None
+        z_values = np.array(z_values)
+        z_values = np.expand_dims(z_values, axis=0)
+        for i in range(start_delta_t, end_delta_t):
+            dt = end_delta_t - i
+            if self.age - dt in self.observed_z_values:
+                previous_z_values = self.observed_z_values[self.age-dt]
+                z_values = np.vstack((z_values, previous_z_values))
+
+        z_values = z_values[~np.all(z_values == 0, axis=1)]
+
+        if len(z_values) > 0:
+            z_values = np.mean(z_values, axis=0)
+        else:
+            z_values = self.last_box_z_values
+
+        return z_values
+
     def delta_speed_direction(self, bbox, delta_t=3):
         previous_box = None
         for i in range(delta_t):
@@ -201,7 +225,7 @@ class KalmanBoxTracker(object):
             self.object_type = ObjectTypes.DYNAMIC
     
 
-    def update(self, bbox, timestamp=None):
+    def update(self, bbox, box_z_values=None):
         """
         Updates the state vector with observed bbox.
         """
@@ -229,6 +253,14 @@ class KalmanBoxTracker(object):
             self.last_observation = bbox
             self.observations[self.age] = bbox
             self.history_observations.append(bbox)
+
+            if box_z_values is not None:
+                self.last_box_z_values = box_z_values
+                self.observed_z_values[self.age] = box_z_values
+                self.history_z_values.append(box_z_values)
+
+            if self.last_box_z_values.sum() >= -100:
+                self.box_z_values = self.interval_z_values(self.last_box_z_values, self.ignore_t, self.delta_t)
 
             #if centroid is not None:
             #    self.last_centroid = centroid
@@ -307,7 +339,7 @@ class KalmanBoxTracker(object):
         bbox_w = np.abs(bbox[2] - bbox[0])
         bbox_h = np.abs(bbox[3] - bbox[1])
 
-        max_bbox_dim = max(bbox_w, bbox_h)
+        max_bbox_dim = max(bbox_w, bbox_h, 0.5)
 
         growth_area_radius = self.velocity_magnitude * self.growth_rate * (self.time_since_update - self.start_growth_t + self.start_growth_boost)
 
@@ -319,8 +351,8 @@ class KalmanBoxTracker(object):
             ])
         else:
             growth_area_center = np.array([
-                ((bbox[0] + bbox[2]) / 2) + self.velocity[1] * growth_area_radius/2,
-                ((bbox[1] + bbox[3]) / 2) + self.velocity[0] * growth_area_radius/2
+                ((bbox[0] + bbox[2]) / 2) + self.velocity[1]*0.75 * growth_area_radius/2,
+                ((bbox[1] + bbox[3]) / 2) + self.velocity[0]*0.75 * growth_area_radius/2
             ])
         return growth_area_center, growth_area_radius
             

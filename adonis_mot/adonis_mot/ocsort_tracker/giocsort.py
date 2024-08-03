@@ -313,7 +313,7 @@ class GIOCSort(object):
             return np.concatenate(ret)
         return np.empty((0, 5))
 
-    def update_v3(self, dets):
+    def update_v3(self, dets, dets_z_values):
         """
         Params:
         dets - a numpy array of detections in the format [[x1,y1,x2,y2],[x1,y1,x2,y2],...]
@@ -339,13 +339,15 @@ class GIOCSort(object):
             trk[:] = [pos[0], pos[1], pos[2], pos[3], 0]
             if np.any(np.isnan(pos)):
                 to_del.append(t)
-                trks_area_centers[t] = [0, 0]
-                trks_area_radii[t] = 0
+                trks_area_centers[t] = np.nan
+                trks_area_radii[t] = np.nan
             else:
                 center, radius = self.trackers[t].get_growth_area(trk)
                 trks_area_centers[t] = center
                 trks_area_radii[t] = radius
         trks = np.ma.compress_rows(np.ma.masked_invalid(trks))
+        trks_area_centers = np.ma.compress_rows(np.ma.masked_invalid(trks_area_centers))
+        trks_area_radii = trks_area_radii[~np.isnan(trks_area_radii)]
         for t in reversed(to_del):
             self.trackers.pop(t)
 
@@ -355,12 +357,13 @@ class GIOCSort(object):
             
         last_boxes = np.array([trk.last_observation for trk in self.trackers])
         tracker_ages = np.array([trk.age for trk in self.trackers])
+        trks_z_values = np.array([trk.box_z_values for trk in self.trackers])
 
         matched_first_as, unmatched_dets_first_as, unmatched_trks_first_as = associate_growth_area_2(
-            dets, trks, trks_area_centers, trks_area_radii, 0.4, tracker_ages, self.growth_age_weight)
+            dets, trks, trks_area_centers, trks_area_radii, 0.45, dets_z_values, trks_z_values, tracker_ages, self.growth_age_weight)
         for m in matched_first_as:
             det_ind, trk_ind = m[0], m[1]
-            self.trackers[trk_ind].update(dets[det_ind, :], get_centroid_from_bbox(dets[det_ind, :]))
+            self.trackers[trk_ind].update(dets[det_ind, :], dets_z_values[det_ind])
 
         unmatched_dets_first_to_second_map = dict()
         for i in range(len(unmatched_dets_first_as)):

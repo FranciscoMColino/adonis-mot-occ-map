@@ -536,6 +536,36 @@ def iou_2d(bbox1, bbox2):
     o = wh / ((bbox1[2] - bbox1[0]) * (bbox1[3] - bbox1[1]) + (bbox2[2] - bbox2[0]) * (bbox2[3] - bbox2[1]) - wh)
     return o
 
+def iou_3d(box1, box2):
+    """
+    Computes IoU between two 3D bounding boxes.
+    Each box is represented by [x_min, y_min, x_max, y_max, z_min, z_max]
+    """
+    # Calculate intersection coordinates
+    xx1 = np.maximum(box1[0], box2[0])
+    yy1 = np.maximum(box1[1], box2[1])
+    xx2 = np.minimum(box1[2], box2[2])
+    yy2 = np.minimum(box1[3], box2[3])
+    zz1 = np.maximum(box1[4], box2[4])
+    zz2 = np.minimum(box1[5], box2[5])
+    
+    # Calculate intersection dimensions
+    w = np.maximum(0., xx2 - xx1)
+    h = np.maximum(0., yy2 - yy1)
+    d = np.maximum(0., zz2 - zz1)
+    
+    # Calculate intersection volume
+    intersection_volume = w * h * d
+    
+    # Calculate volumes of individual boxes
+    vol1 = (box1[3] - box1[0]) * (box1[4] - box1[1]) * (box1[5] - box1[2])
+    vol2 = (box2[3] - box2[0]) * (box2[4] - box2[1]) * (box2[5] - box2[2])
+    
+    # Calculate IoU
+    iou = intersection_volume / (vol1 + vol2 - intersection_volume)
+    
+    return iou
+
 def translate_bbox_to_center(bbox, new_center):
     """
     Translate bbox to a new center.
@@ -605,7 +635,7 @@ def associate_growth_area_1(detection_boxes, tracker_boxes, tracker_area_centers
 
     return matches, np.array(unmatched_detections), np.array(unmatched_trackers)
 
-def associate_growth_area_2(detection_boxes, tracker_boxes, tracker_area_centers, tracker_area_radii, iou_threshold, tracker_ages, age_weight=0.2):
+def associate_growth_area_2(detection_boxes, tracker_boxes, tracker_area_centers, tracker_area_radii, iou_threshold, dets_z_values, trks_z_values, tracker_ages, age_weight):
     if len(tracker_boxes) == 0 or len(detection_boxes) == 0:
         return np.empty((0, 2), dtype=int), np.arange(len(detection_boxes)), np.empty((0, 5), dtype=int)
 
@@ -622,6 +652,12 @@ def associate_growth_area_2(detection_boxes, tracker_boxes, tracker_area_centers
             tracker_center = tracker_centers[t_idx]
             detection_box_translated = translate_bbox_to_center(detection_box, tracker_center)
             tracker_box_translated = translate_bbox_to_center(tracker_box, tracker_center)
+            #detection_z = dets_z_values[d_idx]
+            #tracker_z = trks_z_values[t_idx]
+            # get 3d boxes
+            #detection_box_translated = np.concatenate([detection_box_translated, detection_z])
+            #tracker_box_translated = np.concatenate([tracker_box_translated, tracker_z])
+            #iou_matrix[d_idx, t_idx] = iou_3d(detection_box_translated, tracker_box_translated)
             iou_matrix[d_idx, t_idx] = iou_2d(detection_box_translated, tracker_box_translated)
 
     # Create an age cost matrix where older trackers are preferred
@@ -641,10 +677,8 @@ def associate_growth_area_2(detection_boxes, tracker_boxes, tracker_area_centers
     dist_trk_det_matrix = dist_trk_det_matrix / dist_trk_det_matrix.max()
     dist_trk_det_matrix = 1 - dist_trk_det_matrix
 
-    print(f'shapes: {dist_matrix.shape} {valid_iou_matrix.shape}, {age_cost.shape}, {dist_trk_det_matrix.shape}')
-
     # Combine IoU and age cost into total cost matrix
-    total_cost = -(valid_iou_matrix + age_cost + dist_trk_det_matrix)
+    total_cost = -(valid_iou_matrix + age_cost)# + dist_trk_det_matrix)
 
     # Perform linear assignment
     matches = linear_assignment(total_cost)

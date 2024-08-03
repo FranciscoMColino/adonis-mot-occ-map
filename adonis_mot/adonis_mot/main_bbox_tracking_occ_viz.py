@@ -88,17 +88,17 @@ class ClusterBoundingBoxViz(Node):
 
         self.ocsort = GIOCSort(
             #det_thresh=0.5,
-            inertia_iou_threshold=0.05,
+            inertia_iou_threshold=0.40,
             growth_iou_threshold=0.001,
             default_iou_threshold=0.02,
-            ignore_t=0,
-            delta_t=15,          
-            min_hits=5,
+            ignore_t=5,
+            delta_t=25,          
+            min_hits=10,
             max_age=60,
-            inertia=0.5,        # 0.8
+            inertia=0.2,        # 0.8
             intertia_age_weight=0.3,
-            growth_rate=0.175,#0.175,
-            growth_age_weight=0.25,
+            growth_rate=0.25,#0.175,
+            growth_age_weight=0.01,
         )
 
         # ado1 config
@@ -216,10 +216,11 @@ class ClusterBoundingBoxViz(Node):
 
         bboxes_array = np.array([get_2d_bbox_from_3d_bbox(np.array([[p.x, p.y, p.z] for p in ember_bbox.points])) for ember_bbox in ember_bbox_array])
         bboxes_to_track = np.array([get_track_struct_from_2d_bbox(bbox) for bbox in bboxes_array])
+        bboxes_z_values = np.array([get_z_value_range_from_3d_bbox(np.array([[p.x, p.y, p.z] for p in ember_bbox.points])) for ember_bbox in ember_bbox_array])
         # centroids2d_array = np.array([[cluster.centroid.x, cluster.centroid.y] for cluster in ember_cluster_array]) TODO keep centroids in ember_bbox_array
         centroids2d_array = np.array([get_centroid_from_bbox(bbox) for bbox in bboxes_array])
 
-        tracking_res = self.ocsort.update_v3(bboxes_to_track)
+        tracking_res = self.ocsort.update_v3(bboxes_to_track, bboxes_z_values)
         tracking_ids = tracking_res[:, 4] - 1 # on update, the tracker id is incremented by 1
 
         MAX_TIME_SINCE_UPDATE = 60

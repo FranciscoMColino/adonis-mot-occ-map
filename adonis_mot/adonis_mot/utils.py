@@ -31,5 +31,12 @@ def get_track_struct_from_2d_bbox(bbox):
     track[4] = 1.0 # Dummy confidence score
     return track
 
+def get_z_value_range_from_3d_bbox(points):
+    # Returns the min and max corners of the bounding box
+    z_values = np.zeros(2)
+    z_values[0] = np.min(points[:, 2])
+    z_values[1] = np.max(points[:, 2])
+    return z_values
+
 def get_centroid_from_bbox(bbox):
     return np.mean(bbox, axis=0)
