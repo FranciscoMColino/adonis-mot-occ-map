@@ -1,3 +1,3 @@
 detection_recording:
-  enable: False
-  save_dir: "data/adonis_detection/dynamic_full_occlusion/TallBotMediumBotOcc-v2-t1-erm1-ado2"
+  enable: True
+  save_dir: "data/adonis_detection/dynamic_no_occlusion/SingleSmallKaya-v1-t1-erm1-ado6"

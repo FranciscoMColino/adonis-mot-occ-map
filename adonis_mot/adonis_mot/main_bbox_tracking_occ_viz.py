@@ -90,7 +90,7 @@ class ClusterBoundingBoxViz(Node):
             #det_thresh=0.5,
             inertia_iou_threshold=0.40,
             growth_iou_threshold=0.001,
-            default_iou_threshold=0.02,
+            default_iou_threshold=0.60,
             ignore_t=5,
             delta_t=25,          
             min_hits=10,
@@ -100,6 +100,8 @@ class ClusterBoundingBoxViz(Node):
             growth_rate=0.25,#0.175,
             growth_age_weight=0.01,
         )
+
+        # TODO load from config and store different configs
 
         # ado1 config
         #self.ocsort = GIOCSort(
@@ -132,6 +134,70 @@ class ClusterBoundingBoxViz(Node):
         #     growth_rate=0.2,
         #     growth_age_weight=1.2,
         # )
+
+        # ado3 config with 0.35 for growth area thresh
+        #self.ocsort = GIOCSort(
+        #    #det_thresh=0.5,
+        #    inertia_iou_threshold=0.40,
+        #    growth_iou_threshold=0.001,
+        #    default_iou_threshold=0.02,
+        #    ignore_t=5,
+        #    delta_t=25,          
+        #    min_hits=10,
+        #    max_age=60,
+        #    inertia=0.2,        # 0.8
+        #    intertia_age_weight=0.3,
+        #    growth_rate=0.25,#0.175,
+        #    growth_age_weight=0.01,
+        #)
+
+        # ado4 config with 0.25 for growth area thresh
+        #self.ocsort = GIOCSort(
+        #    #det_thresh=0.5,
+        #    inertia_iou_threshold=0.40,
+        #    growth_iou_threshold=0.001,
+        #    default_iou_threshold=0.02,
+        #    ignore_t=5,
+        #    delta_t=25,          
+        #    min_hits=10,
+        #    max_age=60,
+        #    inertia=0.2,        # 0.8
+        #    intertia_age_weight=0.3,
+        #    growth_rate=0.25,#0.175,
+        #    growth_age_weight=0.01,
+        #)
+
+        # ado5 config with 0.35 for growth area thresh
+        #self.ocsort = GIOCSort(
+        #    #det_thresh=0.5,
+        #    inertia_iou_threshold=0.40,
+        #    growth_iou_threshold=0.001,
+        #    default_iou_threshold=0.02,
+        #    ignore_t=5,
+        #    delta_t=25,          
+        #    min_hits=5,
+        #    max_age=60,
+        #    inertia=0.2,        # 0.8
+        #    intertia_age_weight=0.3,
+        #    growth_rate=0.25,#0.175,
+        #    growth_age_weight=0.01,
+        #)
+
+        # ado6 config with 0.35 for growth area thresh and max_t_since_update=15
+        #self.ocsort = GIOCSort(
+        #    #det_thresh=0.5,
+        #    inertia_iou_threshold=0.40,
+        #    growth_iou_threshold=0.001,
+        #    default_iou_threshold=0.60,
+        #    ignore_t=5,
+        #    delta_t=25,          
+        #    min_hits=10,
+        #    max_age=30,
+        #    inertia=0.2,        # 0.8
+        #    intertia_age_weight=0.3,
+        #    growth_rate=0.25,#0.175,
+        #    growth_age_weight=0.01,
+        #)
         
 
         self.occupancy_grid = TrackerOccGrid(
@@ -223,7 +289,7 @@ class ClusterBoundingBoxViz(Node):
         tracking_res = self.ocsort.update_v3(bboxes_to_track, bboxes_z_values)
         tracking_ids = tracking_res[:, 4] - 1 # on update, the tracker id is incremented by 1
 
-        MAX_TIME_SINCE_UPDATE = 60
+        MAX_TIME_SINCE_UPDATE = 15
         MIN_NUM_OBSERVATIONS = 15
 
         valid_in_scope_trks = np.array([trk for trk in self.ocsort.get_trackers() if trk.time_since_update < MAX_TIME_SINCE_UPDATE and trk.hits > MIN_NUM_OBSERVATIONS])

@@ -324,6 +324,8 @@ class GIOCSort(object):
 
         if dets is None:
             return np.empty((0, 5))
+        elif not dets.size:
+            dets = np.empty((0, 5))
         elif dets.shape[1] == 4:
             dets = np.concatenate((dets, np.ones((dets.shape[0], 1))), axis=1)
 
@@ -360,7 +362,7 @@ class GIOCSort(object):
         trks_z_values = np.array([trk.box_z_values for trk in self.trackers])
 
         matched_first_as, unmatched_dets_first_as, unmatched_trks_first_as = associate_growth_area_2(
-            dets, trks, trks_area_centers, trks_area_radii, 0.45, dets_z_values, trks_z_values, tracker_ages, self.growth_age_weight)
+            dets, trks, trks_area_centers, trks_area_radii, 0.30, dets_z_values, trks_z_values, tracker_ages, self.growth_age_weight)
         for m in matched_first_as:
             det_ind, trk_ind = m[0], m[1]
             self.trackers[trk_ind].update(dets[det_ind, :], dets_z_values[det_ind])
